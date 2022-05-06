@@ -1,0 +1,4 @@
+name: SunSync
+version: 0.1-SNAPSHOT
+main: com.github.nikalon.sunsync.SunSync
+api-version: 1.18
