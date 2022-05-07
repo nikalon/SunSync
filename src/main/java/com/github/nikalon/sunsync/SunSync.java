@@ -32,6 +32,10 @@ public class SunSync extends JavaPlugin implements Runnable {
     private Logger logger;
 
     // Configuration values
+    private static final long SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT  = 5L;
+    private static final long SYNCHRONIZATION_INTERVAL_MIN_VALUE        = 1L;
+    private static final long SYNCHRONIZATION_INTERVAL_MAX_VALUE        = 1800L;
+
     private GeographicCoordinate location;
     private long syncIntervalSec;
 
@@ -58,10 +62,10 @@ public class SunSync extends JavaPlugin implements Runnable {
         }
 
         // Synchronization interval
-        long sync_interval = this.configFile.getLong("synchronization_interval_seconds", 1L);
-        if (sync_interval < 1L || sync_interval > 1800L) {
-            logger.log(Level.SEVERE, "\"synchronization_interval_seconds\" value in config.yml is incorrect, using default value. Please, check the data.");
-            sync_interval = 1L;
+        long sync_interval = this.configFile.getLong("synchronization_interval_seconds", SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT);
+        if (sync_interval < SYNCHRONIZATION_INTERVAL_MIN_VALUE || sync_interval > SYNCHRONIZATION_INTERVAL_MAX_VALUE) {
+            logger.log(Level.SEVERE, "\"synchronization_interval_seconds\" value in config.yml is incorrect, using default value. Please, use integer values between " + SYNCHRONIZATION_INTERVAL_MIN_VALUE + " and " + SYNCHRONIZATION_INTERVAL_MAX_VALUE + ".");
+            sync_interval = SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT;
         }
         this.syncIntervalSec = 20L * sync_interval;
     }

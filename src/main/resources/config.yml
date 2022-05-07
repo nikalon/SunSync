@@ -1,9 +1,9 @@
 # Geographical location on Earth where the server is located. This value will be used to perform the calculations to
 # determine the times of sunrise and sunset in the real world every day.
 #
-# Pair of [latitude, longitude] in decimal degrees. Allowed values: from -90.0 to 90.0 degrees, both included.
+# Pair of [latitude, longitude] in decimal degrees. Allowed values: from -90.0 to 90.0 degrees, both included. Defaults to [0.0, 0.0]
 location: [0.0, 0.0]
 
 # Sets the frequency of time synchronization.
-# Integer value in seconds. Allowed values: from 1 to 1800, both included.
+# Integer value in seconds. Allowed values: from 1 to 1800, both included. Defaults to 5.
 synchronization_interval_seconds: 5
