@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.github.nikalon.sunsync.Sun.GeographicCoordinate.InvalidGeographicCoordinateException;
+
 import static com.github.nikalon.sunsync.Sun.*;
 
 public class SunSync extends JavaPlugin implements Runnable {
@@ -17,10 +19,13 @@ public class SunSync extends JavaPlugin implements Runnable {
     private static final long MINECRAFT_NIGHT_LENGTH_TICKS  = 10000;
 
     // Sunrise time start as seen from the game. We cannot start from day -1000, so we use the next valid sunrise time.
-    private static final int MINECRAFT_SUNRISE_START_TICKS  = 23000;
+    private static final long MINECRAFT_SUNRISE_START_TICKS = 23000;
 
     // Sunset time start as seen from the game
-    private static final int MINECRAFT_SUNSET_START_TICKS   = 37000;
+    private static final long MINECRAFT_SUNSET_START_TICKS  = 37000;
+
+    private static final long MINECRAFT_MIDDAY_TICKS        = 30000;
+    private static final long MINECRAFT_MIDNIGHT_TICKS      = 42000;
 
     private BukkitTask task;
     private FileConfiguration configFile;
@@ -32,20 +37,24 @@ public class SunSync extends JavaPlugin implements Runnable {
 
     @Override
     public void onLoad() {
+        this.logger = getLogger();
+
         // Load configuration
         saveDefaultConfig();
-        configFile = getConfig();
-
-        this.logger = getLogger();
         this.configFile = getConfig();
 
-        // Location on Earth
+        // Location of Earth
         List<Double> geo = this.configFile.getDoubleList("location");
         if (geo == null || geo.size() != 2) {
-            this.location = new GeographicCoordinate(0.0, 0.0);
-            logger.log(Level.SEVERE, "\"location\" value in config.yml is incorrect, using default values. Please, check the data.");
+            this.location = GeographicCoordinate.defaultCoordinate();
+            logger.severe("\"location\" value in config.yml is incorrect, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
         } else {
-            this.location = new GeographicCoordinate(geo.get(0), geo.get(1));
+            try {
+                this.location = GeographicCoordinate.from(geo.get(0), geo.get(1));
+            } catch (InvalidGeographicCoordinateException e) {
+                this.location = GeographicCoordinate.defaultCoordinate();
+                logger.severe("\"location\" value in config.yml is incorrect, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
+            }
         }
 
         // Synchronization interval
@@ -76,9 +85,22 @@ public class SunSync extends JavaPlugin implements Runnable {
 
         // TODO: Cache calculations as long as necessary
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-        RiseAndSet today_events = Sun.sunriseAndSunsetTimes(location, now.toLocalDate());
-        RiseAndSet yesterday_events = Sun.sunriseAndSunsetTimes(location, now.minusDays(1).toLocalDate());
-        RiseAndSet tomorrow_events = Sun.sunriseAndSunsetTimes(location, now.plusDays(1).toLocalDate());
+        RiseAndSet today_events;
+        RiseAndSet yesterday_events;
+        RiseAndSet tomorrow_events;
+        try {
+            today_events = Sun.sunriseAndSunsetTimes(location, now.toLocalDate());
+            yesterday_events = Sun.sunriseAndSunsetTimes(location, now.minusDays(1).toLocalDate());
+            tomorrow_events = Sun.sunriseAndSunsetTimes(location, now.plusDays(1).toLocalDate());
+        } catch (NeverRaisesException e) {
+            Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDNIGHT_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
+            logger.warning("The Sun will not rise today. Setting game time to midnight (Minecraft time " + MINECRAFT_MIDNIGHT_TICKS + ").");
+            return;
+        } catch (NeverSetsException e) {
+            Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDDAY_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
+            logger.warning("The Sun will not set today. Setting game time to midday (Minecraft time " + MINECRAFT_MIDDAY_TICKS + ").");
+            return;
+        }
 
         // Figures out if it's daytime or nighttime right now
         LocalDateTime last_event_time;

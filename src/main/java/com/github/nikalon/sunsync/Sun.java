@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-public class Sun {
+class Sun {
     // Acronyms used:
     // LST  Local Sidereal Time
     // GST  Greenwich Sidereal Time
@@ -20,7 +20,7 @@ public class Sun {
         return dividend - divisor * Math.floor(dividend / divisor);
     }
 
-    protected static double GreenwichToJulianDate(double gDay, int gMonth, int gYear) {
+    static double GreenwichToJulianDate(double gDay, int gMonth, int gYear) {
         int month_p = gMonth;
         int year_p = gYear;
 
@@ -41,7 +41,7 @@ public class Sun {
         return B + C + D + gDay + 1720994.5;
     }
 
-    protected static LocalTime GSTToUT(double GSTHour, int gDay, int gMonth, int gYear) {
+    static LocalTime GSTToUT(double GSTHour, int gDay, int gMonth, int gYear) {
         double julian_date = GreenwichToJulianDate(gDay, gMonth, gYear);
         double S = julian_date - 2451545.0;
         double T = S / 36525.0;
@@ -61,20 +61,19 @@ public class Sun {
         return LocalTime.of(hour, minute, second);
     }
 
-    protected static RiseAndSet riseAndSet(EquatorialCoordinate eqCoord, GeographicCoordinate geoCoord, int gDay, int gMonth, int gYear) {
+    static RiseAndSet riseAndSet(EquatorialCoordinate eqCoord, GeographicCoordinate geoCoord, int gDay, int gMonth, int gYear) throws NeverRaisesException, NeverSetsException {
         double alpha_deg = eqCoord.right_ascension;
         double delta_rad = Math.toRadians(eqCoord.declination);
         double phi_rad = Math.toRadians(geoCoord.latitude);
 
         double hour_angle_cosine = -(VERTICAL_SHIFT_SINE + Math.sin(phi_rad) * Math.sin(delta_rad)) / (Math.cos(phi_rad) * Math.cos(delta_rad));
 
-        // TODO: Handle this!
         if (hour_angle_cosine > 1) {
-            // Never rises!
-            return null;
+            // The Sun never rises!
+            throw new NeverRaisesException();
         } else if (hour_angle_cosine < -1) {
-            // Never sets!
-            return null;
+            // The Sun never sets!
+            throw new NeverSetsException();
         }
 
         double Hour_angle_hours = Math.toDegrees(Math.acos(hour_angle_cosine)) / 15;
@@ -94,7 +93,7 @@ public class Sun {
         return new RiseAndSet(LocalDateTime.of(date, rise_UT), LocalDateTime.of(date, set_UT));
     }
 
-    protected static EquatorialCoordinate sunPositionAtDay(double gDay, int gMonth, int gYear) {
+    static EquatorialCoordinate sunPositionAtDay(double gDay, int gMonth, int gYear) {
         // The epoch is January 0.0 2010
         double D = GreenwichToJulianDate(gDay, gMonth, gYear) - GreenwichToJulianDate(0, 1, 2010);
         double N = modulo(((360 / 365.242191) * D), 360);
@@ -112,7 +111,7 @@ public class Sun {
         return ecl_coord.toEquatorial(gDay, gMonth, gYear);
     }
 
-    public static RiseAndSet sunriseAndSunsetTimes(GeographicCoordinate geo_coord, LocalDate date) {
+    static RiseAndSet sunriseAndSunsetTimes(GeographicCoordinate geo_coord, LocalDate date) throws NeverRaisesException, NeverSetsException {
         // Calculates the approximate UTC times of sunrise and sunset (at sea level) given by a geographical location
         // on Earth and a date. The returned times should be correct within a few minutes of the real times. It is not
         // intended to be an exact calculation.
@@ -121,24 +120,58 @@ public class Sun {
         return riseAndSet(sun_pos, geo_coord, date.getDayOfMonth(), date.getMonthValue(), date.getYear());
     }
 
-    protected static class GeographicCoordinate {
-        // TODO: Data validation
+    static class GeographicCoordinate {
         public final double latitude;
         public final double longitude;
 
-        public GeographicCoordinate(double latitude, double longitude) {
+        private GeographicCoordinate(double latitude, double longitude) {
+            // Set as private constructor to disallow direct instantiation
             this.latitude = latitude;
             this.longitude = longitude;
         }
+
+        static GeographicCoordinate defaultCoordinate() {
+            return new GeographicCoordinate(0.0, 0.0);
+        }
+
+        static GeographicCoordinate from(double latitude, double longitude) throws InvalidGeographicCoordinateException {
+            if (latitude < -90.0 || latitude > 90.0) {
+                throw new InvalidGeographicCoordinateException("Invalid latitude value: " + latitude + ". Only decimal degrees between -90.0 and 90.0 are valid.");
+            }
+
+            if (longitude < -90.0 || longitude > 90.0) {
+                throw new InvalidGeographicCoordinateException("Invalid longitude value: " + latitude + ". Only decimal degrees between -90.0 and 90.0 are valid.");
+            }
+
+            return new GeographicCoordinate(latitude, longitude);
+        }
+
+        static class InvalidGeographicCoordinateException extends Exception {
+            public InvalidGeographicCoordinateException(String message) {
+                super(message);
+            }
+        }
     }
 
-    protected static class RiseAndSet {
+    static class RiseAndSet {
         public final LocalDateTime riseUTCTime;
         public final LocalDateTime setUTCTime;
 
         public RiseAndSet(LocalDateTime riseUTCTime, LocalDateTime setUTCTime) {
             this.riseUTCTime = riseUTCTime;
             this.setUTCTime = setUTCTime;
+        }
+    }
+
+    static class NeverRaisesException extends Exception {
+        public NeverRaisesException() {
+            super("The celestial object never raises above the horizon!");
+        }
+    }
+
+    static class NeverSetsException extends Exception {
+        public NeverSetsException() {
+            super("The celestial object never sets below the horizon!");
         }
     }
 
