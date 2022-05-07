@@ -1,32 +1,18 @@
 package com.github.nikalon.sunsync;
 
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.time.*;
+import java.util.List;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.github.nikalon.sunsync.Sun.*;
 
-public class SunSync extends JavaPlugin {
-    private static BukkitTask task;
-
-    @Override
-    public void onEnable() {
-        // TODO: Disable time-related things to let this plugin do its job!
-        long delay = 100L; // 20L * 5L = 5 seconds // TODO: Move to config
-        SunSync.task = Bukkit.getScheduler().runTaskTimer(this, new SynchronizationTask(), 0, delay);
-    }
-
-    @Override
-    public void onDisable() {
-        SunSync.task.cancel();
-        SunSync.task = null;
-    }
-}
-
-class SynchronizationTask implements Runnable {
+public class SunSync extends JavaPlugin implements Runnable {
     private static final long MINECRAFT_DAY_LENGTH_TICKS    = 14000;
     private static final long MINECRAFT_NIGHT_LENGTH_TICKS  = 10000;
 
@@ -36,17 +22,57 @@ class SynchronizationTask implements Runnable {
     // Sunset time start as seen from the game
     private static final int MINECRAFT_SUNSET_START_TICKS   = 37000;
 
-    private final SunSync plugin;
+    private BukkitTask task;
+    private FileConfiguration configFile;
+    private Logger logger;
 
-    SynchronizationTask() {
-        this.plugin = JavaPlugin.getPlugin(SunSync.class);
+    // Configuration values
+    private GeographicCoordinate location;
+    private long syncIntervalSec;
+
+    @Override
+    public void onLoad() {
+        // Load configuration
+        saveDefaultConfig();
+        configFile = getConfig();
+
+        this.logger = getLogger();
+        this.configFile = getConfig();
+
+        // Location on Earth
+        List<Double> geo = this.configFile.getDoubleList("location");
+        if (geo == null || geo.size() != 2) {
+            this.location = new GeographicCoordinate(0.0, 0.0);
+            logger.log(Level.SEVERE, "\"location\" value in config.yml is incorrect, using default values. Please, check the data.");
+        } else {
+            this.location = new GeographicCoordinate(geo.get(0), geo.get(1));
+        }
+
+        // Synchronization interval
+        long sync_interval = this.configFile.getLong("synchronization_interval_seconds", 1L);
+        if (sync_interval < 1L || sync_interval > 1800L) {
+            logger.log(Level.SEVERE, "\"synchronization_interval_seconds\" value in config.yml is incorrect, using default value. Please, check the data.");
+            sync_interval = 1L;
+        }
+        this.syncIntervalSec = 20L * sync_interval;
+    }
+
+    @Override
+    public void onEnable() {
+        // TODO: Disable time-related things to let this plugin do its job!
+        task = Bukkit.getScheduler().runTaskTimer(this, this, 0, syncIntervalSec);
+    }
+
+    @Override
+    public void onDisable() {
+        task.cancel();
+        task = null;
+        saveConfig();
     }
 
     @Override
     public void run() {
         // Whenever the term "event" is used it means either the sunrise or sunset in the real world
-
-        GeographicCoordinate location = new GeographicCoordinate(0.0, 0.0); // TODO: Move to config
 
         // TODO: Cache calculations as long as necessary
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
@@ -88,6 +114,6 @@ class SynchronizationTask implements Runnable {
         }
 
         Bukkit.getWorlds().forEach((world) -> world.setTime(minecraft_time)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-        plugin.getLogger().log(Level.INFO, "All worlds synchronized to time " + minecraft_time);
+        logger.info("All worlds synchronized to time " + minecraft_time);
     }
 }
