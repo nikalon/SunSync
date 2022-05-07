@@ -31,6 +31,11 @@ public class SunSync extends JavaPlugin implements Runnable {
     private FileConfiguration configFile;
     private Logger logger;
 
+    LocalDate lastUpdated; // Used to cache sunrise and sunset calculations for a day
+    RiseAndSet todayEvents;
+    RiseAndSet yesterdayEvents;
+    RiseAndSet tomorrowEvents;
+
     // Configuration values
     private static final long SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT  = 5L;
     private static final long SYNCHRONIZATION_INTERVAL_MIN_VALUE        = 1L;
@@ -60,6 +65,7 @@ public class SunSync extends JavaPlugin implements Runnable {
                 logger.severe("\"location\" value in config.yml is incorrect, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
             }
         }
+        logger.info("Using geographic coordinates: " + location);
 
         // Synchronization interval
         long sync_interval = this.configFile.getLong("synchronization_interval_seconds", SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT);
@@ -87,15 +93,17 @@ public class SunSync extends JavaPlugin implements Runnable {
     public void run() {
         // Whenever the term "event" is used it means either the sunrise or sunset in the real world
 
-        // TODO: Cache calculations as long as necessary
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-        RiseAndSet today_events;
-        RiseAndSet yesterday_events;
-        RiseAndSet tomorrow_events;
         try {
-            today_events = Sun.sunriseAndSunsetTimes(location, now.toLocalDate());
-            yesterday_events = Sun.sunriseAndSunsetTimes(location, now.minusDays(1).toLocalDate());
-            tomorrow_events = Sun.sunriseAndSunsetTimes(location, now.plusDays(1).toLocalDate());
+            if (lastUpdated == null || now.toLocalDate().isAfter(lastUpdated)) {
+                // Cache calculations until 23:59:59
+                lastUpdated = now.toLocalDate();
+                todayEvents = Sun.sunriseAndSunsetTimes(location, now.toLocalDate());
+                yesterdayEvents = Sun.sunriseAndSunsetTimes(location, now.minusDays(1).toLocalDate());
+                tomorrowEvents = Sun.sunriseAndSunsetTimes(location, now.plusDays(1).toLocalDate());
+
+                logger.info("Today the Sun will rise at " + todayEvents.riseUTCTime.toLocalTime() + " UTC, and will set at " + todayEvents.setUTCTime.toLocalTime() + " UTC");
+            }
         } catch (NeverRaisesException e) {
             Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDNIGHT_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
             logger.warning("The Sun will not rise today. Setting game time to midnight (Minecraft time " + MINECRAFT_MIDNIGHT_TICKS + ").");
@@ -106,25 +114,28 @@ public class SunSync extends JavaPlugin implements Runnable {
             return;
         }
 
+        // Error condition reached. The Sun will not rise or will not set today. Skipping time synchronization...
+        if (todayEvents == null) return;
+
         // Figures out if it's daytime or nighttime right now
         LocalDateTime last_event_time;
         LocalDateTime next_event_time;
         boolean is_daytime;
-        if (now.isBefore(today_events.riseUTCTime)) {
+        if (now.isBefore(todayEvents.riseUTCTime)) {
             // Nighttime. Last event was yesterday's sunset. Next event is today's sunrise.
             is_daytime = false;
-            last_event_time = yesterday_events.setUTCTime;
-            next_event_time = today_events.riseUTCTime;
-        } else if (now.isAfter(today_events.setUTCTime)) {
+            last_event_time = yesterdayEvents.setUTCTime;
+            next_event_time = todayEvents.riseUTCTime;
+        } else if (now.isAfter(todayEvents.setUTCTime)) {
             // Nighttime. Last event was today's sunset. Next event is tomorrow's sunrise.
             is_daytime = false;
-            last_event_time = today_events.setUTCTime;
-            next_event_time = tomorrow_events.riseUTCTime;
+            last_event_time = todayEvents.setUTCTime;
+            next_event_time = tomorrowEvents.riseUTCTime;
         } else {
             // Daytime. Last event was today's sunrise. Next event is today's sunset.
             is_daytime = true;
-            last_event_time = today_events.riseUTCTime;
-            next_event_time = today_events.setUTCTime;
+            last_event_time = todayEvents.riseUTCTime;
+            next_event_time = todayEvents.setUTCTime;
         }
 
         double event_interval_duration = Duration.between(last_event_time, next_event_time).getSeconds();

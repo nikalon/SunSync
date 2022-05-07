@@ -146,6 +146,10 @@ class Sun {
             return new GeographicCoordinate(latitude, longitude);
         }
 
+        public String toString() {
+            return String.format("(%.2f, %.2f)", latitude, longitude);
+        }
+
         static class InvalidGeographicCoordinateException extends Exception {
             public InvalidGeographicCoordinateException(String message) {
                 super(message);
