@@ -1,7 +1,17 @@
 package com.github.nikalon.sunsync;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameRule;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerBedEnterEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.server.ServerCommandEvent;
+import org.bukkit.event.world.TimeSkipEvent;
+import org.bukkit.event.world.TimeSkipEvent.SkipReason;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -14,7 +24,7 @@ import com.github.nikalon.sunsync.Sun.GeographicCoordinate.InvalidGeographicCoor
 
 import static com.github.nikalon.sunsync.Sun.*;
 
-public class SunSync extends JavaPlugin implements Runnable {
+public class SunSync extends JavaPlugin implements Runnable, Listener {
     private static final long MINECRAFT_DAY_LENGTH_TICKS    = 14000;
     private static final long MINECRAFT_NIGHT_LENGTH_TICKS  = 10000;
 
@@ -78,14 +88,19 @@ public class SunSync extends JavaPlugin implements Runnable {
 
     @Override
     public void onEnable() {
-        // TODO: Disable time-related things to let this plugin do its job!
+        // TODO: There should be a way to "fake" this setting for each connected player without actually changing the game rule
+        Bukkit.getWorlds().forEach(world -> world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false));
+        logger.info("While this plugin is active the game rule doDaylightCycle will be set to false");
+
         task = Bukkit.getScheduler().runTaskTimer(this, this, 0, syncIntervalSec);
+        getServer().getPluginManager().registerEvents(this, this);
     }
 
     @Override
     public void onDisable() {
         task.cancel();
         task = null;
+        HandlerList.unregisterAll((Listener) this);
         saveConfig();
     }
 
@@ -152,5 +167,38 @@ public class SunSync extends JavaPlugin implements Runnable {
 
         Bukkit.getWorlds().forEach((world) -> world.setTime(minecraft_time)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
         logger.info("All worlds synchronized to time " + minecraft_time);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onTimeSkipEvent(TimeSkipEvent event) {
+        // This will prevent anything from changing the time, except this plugin itself
+        if (! event.getSkipReason().equals(SkipReason.CUSTOM)) {
+            // FIXME: There should be a way to detect whether this event was fired from this plugin. For now, it will not prevent other plugins from changing the time
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPlayerIssuedTimeSetCommandEvent(PlayerCommandPreprocessEvent event) {
+        String command = event.getMessage();
+        if (command.startsWith("/time set") || command.startsWith("/time add")) {
+            // TODO: Use colors!
+            event.getPlayer().sendRawMessage(String.format("WARNING: This command will have no effect while the plugin %s is enabled.", getName()));
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onServerIssuedTimeSetCommandEvent(ServerCommandEvent event) {
+        String command = event.getCommand();
+        if (command.contains("time set") || command.contains("time add")) {
+            // TODO: Use colors!
+            logger.warning(String.format("WARNING: This command will have no effect while the plugin %s is enabled.", getName()));
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPlayerBedEnterEvent(PlayerBedEnterEvent event) {
+        // TODO: Use colors!
+        event.getPlayer().sendRawMessage(String.format("WARNING: Beds will not skip the night while the plugin %s is enabled.", getName()));
     }
 }
