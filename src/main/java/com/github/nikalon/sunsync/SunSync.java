@@ -19,6 +19,7 @@ import java.time.*;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import com.github.nikalon.sunsync.Sun.GeographicCoordinate.InvalidGeographicCoordinateException;
 
@@ -198,8 +199,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerIssuedTimeSetCommandEvent(PlayerCommandPreprocessEvent event) {
-        String command = event.getMessage();
-        if (command.startsWith("/time set") || command.startsWith("/time add")) {
+        if (SunSync.commandChangesGameTime(event.getMessage())) {
             // TODO: Use colors!
             event.getPlayer().sendRawMessage(String.format("This command will have no effect while the plugin %s is enabled.", getName()));
         }
@@ -207,8 +207,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onServerIssuedTimeSetCommandEvent(ServerCommandEvent event) {
-        String command = event.getCommand();
-        if (command.contains("time set") || command.contains("time add")) {
+        if (commandChangesGameTime(event.getCommand())) {
             // TODO: Use colors!
             logger.warning(String.format("This command will have no effect while the plugin %s is enabled.", getName()));
         }
@@ -218,6 +217,17 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     public void onPlayerBedEnterEvent(PlayerBedEnterEvent event) {
         // TODO: Use colors! Maybe use a toast message instead?
         event.getPlayer().sendRawMessage(String.format("Beds will not skip the night while the plugin %s is enabled.", getName()));
+    }
+
+    static boolean commandChangesGameTime(String command) {
+        // Should detect the following commands:
+        // - time set
+        // - time add
+        //
+        // But not:
+        // - time query
+        String com = command.trim().toLowerCase();
+        return Pattern.matches("/?(minecraft:)?time\\p{javaWhitespace}+(set|add).*", com);
     }
 
     private void debugLog(String message) {
