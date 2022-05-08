@@ -50,6 +50,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private static final long SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT  = 5L;
     private static final long SYNCHRONIZATION_INTERVAL_MIN_VALUE        = 1L;
     private static final long SYNCHRONIZATION_INTERVAL_MAX_VALUE        = 1800L;
+    private static final boolean DEBUG_MODE_DEFAULT                     = false;
 
     private GeographicCoordinate location;
     private long syncIntervalSec;
@@ -69,7 +70,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             this.debugMode = (Boolean) debugVal;
         } else {
             logger.severe("\"debug_mode\" value in config.yml is invalid, using default value. Please, use a boolean value (true or false).");
-            this.debugMode = false;
+            this.debugMode = DEBUG_MODE_DEFAULT;
         }
 
         if (this.debugMode) {
@@ -128,7 +129,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
         try {
             if (lastUpdated == null || now.toLocalDate().isAfter(lastUpdated)) {
-                // Cache calculations until 23:59:59
+                // Cache calculations until 23:59:59 (UTC)
                 lastUpdated = now.toLocalDate();
                 todayEvents = Sun.sunriseAndSunsetTimes(location, now.toLocalDate());
                 yesterdayEvents = Sun.sunriseAndSunsetTimes(location, now.minusDays(1).toLocalDate());
