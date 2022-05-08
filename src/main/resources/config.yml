@@ -7,3 +7,7 @@ location: [0.0, 0.0]
 # Sets the frequency of time synchronization.
 # Integer value in seconds. Allowed values: from 1 to 1800, both included. Defaults to 5.
 synchronization_interval_seconds: 5
+
+# Enables or disables debug mode. While in debug mode this plugin will print more logs to the server console.
+# Boolean value (true or false). Defaults to false.
+# debug_mode: false

@@ -53,6 +53,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     private GeographicCoordinate location;
     private long syncIntervalSec;
+    private boolean debugMode;
 
     @Override
     public void onLoad() {
@@ -62,35 +63,49 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         saveDefaultConfig();
         this.configFile = getConfig();
 
+        // Debug mode
+        Object debugVal = this.configFile.get("debug_mode");
+        if (debugVal != null && debugVal instanceof Boolean) {
+            this.debugMode = (Boolean) debugVal;
+        } else {
+            logger.severe("\"debug_mode\" value in config.yml is invalid, using default value. Please, use a boolean value (true or false).");
+            this.debugMode = false;
+        }
+
+        if (this.debugMode) {
+            logger.warning("debug mode is enabled. To disable debug mode set the option \"debug_mode\" to false in config.yml and restart the server.");
+        }
+
         // Location of Earth
         List<Double> geo = this.configFile.getDoubleList("location");
         if (geo == null || geo.size() != 2) {
             this.location = GeographicCoordinate.defaultCoordinate();
-            logger.severe("\"location\" value in config.yml is incorrect, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
+            logger.severe("\"location\" value in config.yml is invalid, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
         } else {
             try {
                 this.location = GeographicCoordinate.from(geo.get(0), geo.get(1));
             } catch (InvalidGeographicCoordinateException e) {
                 this.location = GeographicCoordinate.defaultCoordinate();
-                logger.severe("\"location\" value in config.yml is incorrect, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
+                logger.severe("\"location\" value in config.yml is invalid, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
             }
         }
-        logger.info("Using geographic coordinates: " + location);
+        debugLog(String.format("Using geographic coordinates: %s", this.location));
 
         // Synchronization interval
         long sync_interval = this.configFile.getLong("synchronization_interval_seconds", SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT);
         if (sync_interval < SYNCHRONIZATION_INTERVAL_MIN_VALUE || sync_interval > SYNCHRONIZATION_INTERVAL_MAX_VALUE) {
-            logger.log(Level.SEVERE, "\"synchronization_interval_seconds\" value in config.yml is incorrect, using default value. Please, use integer values between " + SYNCHRONIZATION_INTERVAL_MIN_VALUE + " and " + SYNCHRONIZATION_INTERVAL_MAX_VALUE + ".");
+            logger.log(Level.SEVERE, "\"synchronization_interval_seconds\" value in config.yml is invalid, using default value. Please, use integer values between " + SYNCHRONIZATION_INTERVAL_MIN_VALUE + " and " + SYNCHRONIZATION_INTERVAL_MAX_VALUE + ".");
             sync_interval = SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT;
         }
         this.syncIntervalSec = 20L * sync_interval;
+        debugLog(String.format("Synchronization interval set to %d seconds", this.syncIntervalSec));
     }
 
     @Override
     public void onEnable() {
         // TODO: There should be a way to "fake" this setting for each connected player without actually changing the game rule
         Bukkit.getWorlds().forEach(world -> world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false));
-        logger.info("While this plugin is active the game rule doDaylightCycle will be set to false");
+        logger.warning("While this plugin is active the game rule doDaylightCycle will be set to false");
 
         task = Bukkit.getScheduler().runTaskTimer(this, this, 0, syncIntervalSec);
         getServer().getPluginManager().registerEvents(this, this);
@@ -109,6 +124,8 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         // Whenever the term "event" is used it means either the sunrise or sunset in the real world
 
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        debugLog(String.format("The time is %s (UTC)", now.toLocalTime()));
+
         try {
             if (lastUpdated == null || now.toLocalDate().isAfter(lastUpdated)) {
                 // Cache calculations until 23:59:59
@@ -117,15 +134,15 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 yesterdayEvents = Sun.sunriseAndSunsetTimes(location, now.minusDays(1).toLocalDate());
                 tomorrowEvents = Sun.sunriseAndSunsetTimes(location, now.plusDays(1).toLocalDate());
 
-                logger.info("Today the Sun will rise at " + todayEvents.riseUTCTime.toLocalTime() + " UTC, and will set at " + todayEvents.setUTCTime.toLocalTime() + " UTC");
+                debugLog(String.format("Today the Sun will rise at %s (UTC), and will set at %s (UTC)", todayEvents.riseUTCTime.toLocalTime(), todayEvents.setUTCTime.toLocalTime()));
             }
         } catch (NeverRaisesException e) {
             Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDNIGHT_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-            logger.warning("The Sun will not rise today. Setting game time to midnight (Minecraft time " + MINECRAFT_MIDNIGHT_TICKS + ").");
+            logger.warning(String.format("The Sun will not rise today. Setting game time to midnight (Minecraft time %d).", MINECRAFT_MIDNIGHT_TICKS));
             return;
         } catch (NeverSetsException e) {
             Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDDAY_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-            logger.warning("The Sun will not set today. Setting game time to midday (Minecraft time " + MINECRAFT_MIDDAY_TICKS + ").");
+            logger.warning(String.format("The Sun will not set today. Setting game time to midday (Minecraft time %d).", MINECRAFT_MIDDAY_TICKS));
             return;
         }
 
@@ -166,7 +183,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         }
 
         Bukkit.getWorlds().forEach((world) -> world.setTime(minecraft_time)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-        logger.info("All worlds synchronized to time " + minecraft_time);
+        debugLog(String.format("All worlds synchronized to Minecraft time %d", minecraft_time));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -183,7 +200,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         String command = event.getMessage();
         if (command.startsWith("/time set") || command.startsWith("/time add")) {
             // TODO: Use colors!
-            event.getPlayer().sendRawMessage(String.format("WARNING: This command will have no effect while the plugin %s is enabled.", getName()));
+            event.getPlayer().sendRawMessage(String.format("This command will have no effect while the plugin %s is enabled.", getName()));
         }
     }
 
@@ -192,13 +209,19 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         String command = event.getCommand();
         if (command.contains("time set") || command.contains("time add")) {
             // TODO: Use colors!
-            logger.warning(String.format("WARNING: This command will have no effect while the plugin %s is enabled.", getName()));
+            logger.warning(String.format("This command will have no effect while the plugin %s is enabled.", getName()));
         }
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerBedEnterEvent(PlayerBedEnterEvent event) {
-        // TODO: Use colors!
-        event.getPlayer().sendRawMessage(String.format("WARNING: Beds will not skip the night while the plugin %s is enabled.", getName()));
+        // TODO: Use colors! Maybe use a toast message instead?
+        event.getPlayer().sendRawMessage(String.format("Beds will not skip the night while the plugin %s is enabled.", getName()));
+    }
+
+    private void debugLog(String message) {
+        if (debugMode) {
+            logger.info(String.format("DEBUG: %s", message));
+        }
     }
 }
