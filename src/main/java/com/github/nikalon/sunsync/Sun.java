@@ -139,15 +139,15 @@ class Sun {
                 throw new InvalidGeographicCoordinateException("Invalid latitude value: " + latitude + ". Only decimal degrees between -90.0 and 90.0 are valid.");
             }
 
-            if (longitude < -90.0 || longitude > 90.0) {
-                throw new InvalidGeographicCoordinateException("Invalid longitude value: " + latitude + ". Only decimal degrees between -90.0 and 90.0 are valid.");
+            if (longitude < -180.0 || longitude > 180.0) {
+                throw new InvalidGeographicCoordinateException("Invalid longitude value: " + latitude + ". Only decimal degrees between -180.0 and 180.0 are valid.");
             }
 
             return new GeographicCoordinate(latitude, longitude);
         }
 
         public String toString() {
-            return String.format("(%.2f, %.2f)", latitude, longitude);
+            return String.format("(%f, %f)", latitude, longitude);
         }
 
         static class InvalidGeographicCoordinateException extends Exception {
