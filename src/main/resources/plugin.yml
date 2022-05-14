@@ -2,3 +2,7 @@ name: SunSync
 version: 0.1-SNAPSHOT
 main: com.github.nikalon.sunsync.SunSync
 api-version: 1.18
+commands:
+  timesync:
+    description: Change or query SunSync parameters
+    usage: "Usage: /<command> [get parameter | set parameter value | pause | continue]"
