@@ -49,10 +49,17 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private BukkitTask task;
     private Logger logger;
 
-    LocalDate lastUpdated; // Used to cache sunrise and sunset calculations for a day
-    RiseAndSet todayEvents;
-    RiseAndSet yesterdayEvents;
-    RiseAndSet tomorrowEvents;
+    private LocalDate lastUpdated; // Used to cache sunrise and sunset calculations for a day
+    private RiseAndSet todayEvents;
+    private RiseAndSet yesterdayEvents;
+    private RiseAndSet tomorrowEvents;
+
+    // Used for command completion
+    private final List<String> ACTIONS = new ArrayList<>(); // get, set, ...
+    private final List<String> PARAMETERS = new ArrayList<>(); // location, debugMode, ...
+    private final List<String> CLOCK_VALUES = new ArrayList<>(); // "default"
+    private final List<String> DEBUG_MODE_VALUES = new ArrayList<>(); // "true", "false"
+    private final List<String> NO_COMPLETION = new ArrayList<>();
 
     private void startTimeSynchronization() {
         stopTimeSynchronization();
@@ -169,6 +176,21 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public void onLoad() {
+        ACTIONS.add("set");
+        ACTIONS.add("get");
+        ACTIONS.add("continue");
+        ACTIONS.add("pause");
+
+        PARAMETERS.add("location");
+        PARAMETERS.add("syncIntervalSec");
+        PARAMETERS.add("debugMode");
+        PARAMETERS.add("clock");
+
+        CLOCK_VALUES.add("default");
+
+        DEBUG_MODE_VALUES.add("true");
+        DEBUG_MODE_VALUES.add("false");
+
         this.logger = getLogger();
 
         // Load configuration
@@ -218,7 +240,9 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         Bukkit.getWorlds().forEach(world -> world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false));
         logger.warning("While this plugin is active the game rule doDaylightCycle will be set to false");
 
-        getCommand("timesync").setExecutor(this);
+        var command = getCommand("timesync");
+        command.setExecutor(this);
+        command.setTabCompleter(this);
         getServer().getPluginManager().registerEvents(this, this);
 
         startTimeSynchronization();
@@ -443,6 +467,27 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         }
 
         return false; // Show usage (set in plugin.yml)
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        // TODO: This is a hacky way to add tab completion. It is ugly as hell, but it works. I should find a way to
+        // clean this up in a way that it sends tab completion according to a tree structure or something. Maybe I can
+        // find a way to do this effortlessly if I clean up the command execution routine in the first place.
+        if (args.length == 1) return ACTIONS; // first-level argument
+        else {
+            var action = args[0];
+            if (args.length == 2 && (action.equals("get") || action.equals("set"))) return PARAMETERS; // Second-level argument. Parameters.
+            else if (action.equals("set") && args.length == 3) {
+                // Third-level argument. Parameter values.
+                // example: "/timesync set parameter "
+                var parameter = args[1];
+                if (parameter.equals("clock")) return CLOCK_VALUES;
+                else if (parameter.equals("debugMode")) return DEBUG_MODE_VALUES;
+            }
+        }
+
+        return NO_COMPLETION;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
