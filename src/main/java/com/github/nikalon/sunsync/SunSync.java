@@ -277,9 +277,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        // TODO: This is a hacky way to add tab completion. It is ugly as hell, but it works. I should find a way to
-        // clean this up in a way that it sends tab completion according to a tree structure or something. Maybe I can
-        // find a way to do this effortlessly if I clean up the command execution routine in the first place.
+        // TODO: Incomplete. Add suggestions for each argument
         if (args.length == 1)   return commandTabCompletion;
         else                    return null;
     }
