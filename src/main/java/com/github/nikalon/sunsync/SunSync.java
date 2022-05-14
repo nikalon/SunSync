@@ -19,6 +19,8 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.time.*;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -54,12 +56,9 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private RiseAndSet yesterdayEvents;
     private RiseAndSet tomorrowEvents;
 
-    // Used for command completion
-    private final List<String> ACTIONS = new ArrayList<>(); // get, set, ...
-    private final List<String> PARAMETERS = new ArrayList<>(); // location, debugMode, ...
-    private final List<String> CLOCK_VALUES = new ArrayList<>(); // "default"
-    private final List<String> DEBUG_MODE_VALUES = new ArrayList<>(); // "true", "false"
-    private final List<String> NO_COMPLETION = new ArrayList<>();
+    // Parameters used in /timesync command
+    private Hashtable<String, ParameterParser> commandParameters;
+    private List<String> commandTabCompletion;
 
     private void startTimeSynchronization() {
         stopTimeSynchronization();
@@ -176,20 +175,19 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public void onLoad() {
-        ACTIONS.add("set");
-        ACTIONS.add("get");
-        ACTIONS.add("continue");
-        ACTIONS.add("pause");
+        // Setup /timesync command
+        commandParameters = new Hashtable<>();
+        commandParameters.put("location", (sender, args) -> parseLocationCommand(sender, args));
+        commandParameters.put("syncIntervalSec", (sender, args) -> parseSyncIntervalSecCommand(sender, args));
+        commandParameters.put("clock", (sender, args) -> parseClockCommand(sender, args));
+        commandParameters.put("debugMode", (sender, args) -> parseDebugModeCommand(sender, args));
+        commandParameters.put("continue", (sender, args) -> parseContinueCommand(sender));
+        commandParameters.put("pause", (sender, args) -> parsePauseCommand(sender));
 
-        PARAMETERS.add("location");
-        PARAMETERS.add("syncIntervalSec");
-        PARAMETERS.add("debugMode");
-        PARAMETERS.add("clock");
-
-        CLOCK_VALUES.add("default");
-
-        DEBUG_MODE_VALUES.add("true");
-        DEBUG_MODE_VALUES.add("false");
+        commandTabCompletion = new ArrayList();
+        for (String key : commandParameters.keySet()) {
+            commandTabCompletion.add(key);
+        }
 
         this.logger = getLogger();
 
@@ -264,209 +262,17 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         // TODO: Use colors!
         // Command /timesync
-        // 1. Should parameter names differ from config.yml?
-        // 2. We don't need a way to automatically add parameters to parse when we add more configuration options
-        // 3. Value parsing should be handled in a central way, in a per-setting basis
-        // 4. Data validation should be handled in a central way
-        // 5. Re-schedule time synchronization routines whenever we change settings
-        // 6. Should I add an option to reset do defaults?
-        // 7. Should I add an option to discard setting changes? This would reload settings from config.yml, not defaults
-
         if (args.length == 0) return false; // Show usage (set in plugin.yml)
 
-        // TODO: It should be desirable to save these options when closing the plugin
-        String parameter;
-        switch (args[0]) {
-            case "get":
-                parameter = args[1];
-                switch(parameter) {
-                    case "location":
-                        sender.sendMessage(String.format("Current location set to %s", configuration.getLocation()));
-                        return true;
-
-                    case "syncIntervalSec":
-                        sender.sendMessage(String.format("Synchronization interval set to %d seconds", configuration.getSynchronizationIntervalSeconds()));
-                        return true;
-
-                    case "debugMode":
-                        if (configuration.getDebugMode())   sender.sendMessage("Debug mode is enabled");
-                        else                                sender.sendMessage("Debug mode is disabled");
-                        return true;
-
-                    case "clock":
-                        // Prints the system clock time (UTC)
-                        var time = LocalTime.now(systemClock);
-                        sender.sendMessage(String.format("The system time is %s (UTC)", time));
-                        return true;
-
-                    default:
-                        sender.sendMessage(String.format("Unknown parameter \"%s\"", parameter));
-                        return true;
-                }
-
-            case "set":
-                parameter = args[1];
-                if (args.length < 3) {
-                    sender.sendMessage("Missing value after parameter");
-                    return true;
-                }
-
-                var value = args[2];
-                switch(parameter) {
-                    case "location":
-                        if (args.length < 4) {
-                            logger.severe("Invalid coordinates. Please, use decimal values between -90.0 and 90.0 degrees (latitude) and -180.0 and 180 degrees (longitude).");
-                            return true;
-                        }
-
-                        var value2 = args[3];
-                        double latitude;
-                        double longitude;
-
-                        try {
-                            latitude = Double.parseDouble(value);
-                            longitude = Double.parseDouble(value2);
-                            var loc = GeographicCoordinate.from(latitude, longitude);
-                            configuration.setLocation(loc);
-
-                            // Force to recalculate sunrise and sunset times
-                            lastUpdated = null;
-                            todayEvents = null;
-                            yesterdayEvents = null;
-                            tomorrowEvents = null;
-
-                            synchronizeTimeNow();
-                            sender.sendMessage(String.format("Location set to %s", loc));
-                        } catch (NumberFormatException e) {
-                            sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
-                        } catch (GeographicCoordinate.InvalidGeographicCoordinateException e) {
-                            sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
-                        }
-
-                        return true;
-
-                    case "syncIntervalSec":
-                        long syncIntervalSec;
-                        try {
-                            syncIntervalSec = Long.parseLong(value);
-                            if (configuration.setSynchronizationIntervalSeconds(syncIntervalSec)) {
-                                if (! syncPaused) {
-                                    startTimeSynchronization();
-                                }
-                                sender.sendMessage(String.format("Synchronization interval set to %d seconds", syncIntervalSec));
-                            } else {
-                                sender.sendMessage(String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
-                            }
-                        } catch (NumberFormatException e) {
-                            sender.sendMessage(String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
-                        }
-                        return true;
-
-                    case "debugMode":
-                        var newDebugMode = false;
-                        if (value.equals("true")) {
-                            newDebugMode = true;
-                        } else if (value.equals("false")) {
-                            newDebugMode = false;
-                        } else {
-                            sender.sendMessage("Invalid value. Please, enter a boolean value (true|false)");
-                            return true;
-                        }
-
-                        if (newDebugMode && configuration.getDebugMode()) {
-                            sender.sendMessage("Debug mode is already enabled!");
-                        } else if (newDebugMode == false && configuration.getDebugMode() == false) {
-                            sender.sendMessage("Debug mode is already disabled!");
-                        } else {
-                            configuration.setDebugMode(newDebugMode);
-                            if (configuration.getDebugMode()) {
-                                sender.sendMessage("Debug mode enabled");
-                            } else {
-                                sender.sendMessage("Debug mode disabled");
-                            }
-                        }
-
-                        return true;
-
-                    case "clock":
-                        // Two possible values: "default" or a time in the format "HH:MM" or "HH:MM:SS"
-                        if (value.equals("default")) {
-                            // Resets the fake system clock to the actual system clock
-                            systemClock = Clock.systemUTC();
-                            sender.sendMessage(String.format("System time set to %s (UTC)", LocalTime.now(systemClock)));
-                        } else {
-                            // Sets a fake system clock to a given time (UTC). It does not change the system time.
-                            var time = value.split(":");
-                            if (time.length < 2 || time.length > 3) {
-                                sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
-                                return true;
-                            }
-
-                            try {
-                                var hour = Integer.parseInt(time[0]);
-                                var minute = Integer.parseInt(time[1]);
-
-                                // Seconds are optional
-                                var second = 0;
-                                if (time.length == 3) {
-                                    second = Integer.parseInt(time[2]);
-                                }
-
-                                // Data validation
-                                if (hour < 0 || hour > 24) {
-                                    sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
-                                    return true;
-                                }
-
-                                if (minute < 0 || minute >= 60) {
-                                    sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
-                                    return true;
-                                }
-
-                                if (second < 0 || second >= 60) {
-                                    // There is the leap second thing in UTC, but I am going to ignore it for now...
-                                    sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
-                                    return true;
-                                }
-
-                                var now = LocalTime.now(ZoneOffset.UTC);
-                                var then = LocalTime.of(hour, minute, second);
-                                systemClock = Clock.offset(Clock.systemUTC(), Duration.between(now, then));
-
-                                sender.sendMessage(String.format("System time set to %s (UTC)", then));
-                            } catch (NumberFormatException e) {
-                                sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
-                            }
-                        }
-
-                        synchronizeTimeNow();
-                        return true;
-
-                    default:
-                        sender.sendMessage(String.format("Unknown parameter \"%s\"", parameter));
-                        return true;
-                }
-
-            case "continue":
-                if (syncPaused) {
-                    startTimeSynchronization();
-                    sender.sendMessage("Time synchronization restarted");
-                } else {
-                    sender.sendMessage("Time synchronization is already running!");
-                }
-                return true;
-
-            case "pause":
-                if (syncPaused) {
-                    sender.sendMessage("Time synchronization is already paused!");
-                } else {
-                    stopTimeSynchronization();
-                    sender.sendMessage("Time synchronization paused");
-                }
-                return true;
+        var parameter = args[0];
+        var parser = commandParameters.get(parameter);
+        if (parser == null) {
+            sender.sendMessage(String.format("Unknown parameter \"%s\"", parameter));
+        } else {
+            parser.parse(sender, Arrays.asList(args).subList(1, args.length));
         }
 
-        return false; // Show usage (set in plugin.yml)
+        return true; // Do not show usage
     }
 
     @Override
@@ -474,20 +280,184 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         // TODO: This is a hacky way to add tab completion. It is ugly as hell, but it works. I should find a way to
         // clean this up in a way that it sends tab completion according to a tree structure or something. Maybe I can
         // find a way to do this effortlessly if I clean up the command execution routine in the first place.
-        if (args.length == 1) return ACTIONS; // first-level argument
-        else {
-            var action = args[0];
-            if (args.length == 2 && (action.equals("get") || action.equals("set"))) return PARAMETERS; // Second-level argument. Parameters.
-            else if (action.equals("set") && args.length == 3) {
-                // Third-level argument. Parameter values.
-                // example: "/timesync set parameter "
-                var parameter = args[1];
-                if (parameter.equals("clock")) return CLOCK_VALUES;
-                else if (parameter.equals("debugMode")) return DEBUG_MODE_VALUES;
+        if (args.length == 1)   return commandTabCompletion;
+        else                    return null;
+    }
+
+    private void parseLocationCommand(CommandSender sender, List<String> args) {
+        String value = null;
+        if (args.size() >= 1) value = args.get(0);
+
+        if (value == null) {
+            sender.sendMessage(String.format("Current location is %s", configuration.getLocation()));
+        } else {
+            if (args.size() < 2) {
+                // A geographic coordinate needs two values: longitude and latitude
+                sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
+                return;
+            }
+
+            var value2 = args.get(1);
+            double latitude;
+            double longitude;
+
+            try {
+                latitude = Double.parseDouble(value);
+                longitude = Double.parseDouble(value2);
+                var loc = GeographicCoordinate.from(latitude, longitude);
+                configuration.setLocation(loc);
+
+                // Force to recalculate sunrise and sunset times
+                lastUpdated = null;
+                todayEvents = null;
+                yesterdayEvents = null;
+                tomorrowEvents = null;
+
+                synchronizeTimeNow();
+                sender.sendMessage(String.format("Location set to %s", loc));
+            } catch (NumberFormatException e) {
+                sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
+            } catch (GeographicCoordinate.InvalidGeographicCoordinateException e) {
+                sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
             }
         }
+    }
 
-        return NO_COMPLETION;
+    private void parseSyncIntervalSecCommand(CommandSender sender, List<String> args) {
+        String value = null;
+        if (args.size() >= 1) value = args.get(0);
+
+        if (value == null) {
+            sender.sendMessage(String.format("Synchronization interval is set to %d seconds", configuration.getSynchronizationIntervalSeconds()));
+        } else {
+            long syncIntervalSec;
+            try {
+                syncIntervalSec = Long.parseLong(value);
+                if (configuration.setSynchronizationIntervalSeconds(syncIntervalSec)) {
+                    if (! syncPaused) {
+                        startTimeSynchronization();
+                    }
+                    sender.sendMessage(String.format("Synchronization interval set to %d seconds", syncIntervalSec));
+                } else {
+                    sender.sendMessage(String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
+                }
+            } catch (NumberFormatException e) {
+                sender.sendMessage(String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
+            }
+        }
+    }
+
+    private void parseDebugModeCommand(CommandSender sender, List<String> args) {
+        String value = null;
+        if (args.size() >= 1) value = args.get(0);
+
+        if (value == null) {
+            if (configuration.getDebugMode())   sender.sendMessage("Debug mode is enabled");
+            else                                sender.sendMessage("Debug mode is disabled");
+        } else {
+            var newDebugMode = false;
+            if (value.equals("true")) {
+                newDebugMode = true;
+            } else if (value.equals("false")) {
+                newDebugMode = false;
+            } else {
+                sender.sendMessage("Invalid value. Please, enter a boolean value (true|false)");
+                return;
+            }
+
+            if (newDebugMode && configuration.getDebugMode()) {
+                sender.sendMessage("Debug mode is already enabled!");
+            } else if (newDebugMode == false && configuration.getDebugMode() == false) {
+                sender.sendMessage("Debug mode is already disabled!");
+            } else {
+                configuration.setDebugMode(newDebugMode);
+                if (configuration.getDebugMode()) {
+                    sender.sendMessage("Debug mode enabled");
+                } else {
+                    sender.sendMessage("Debug mode disabled");
+                }
+            }
+        }
+    }
+
+    private void parseClockCommand(CommandSender sender, List<String> args) {
+        String value = null;
+        if (args.size() >= 1) value = args.get(0);
+
+        if (value == null) {
+            var time = LocalTime.now(systemClock);
+            sender.sendMessage(String.format("The system time is %s (UTC)", time));
+        } else {
+            // Two possible values: "default" or a time in the format "HH:MM" or "HH:MM:SS"
+            if (value.equals("default")) {
+                // Resets the fake system clock to the actual system clock
+                systemClock = Clock.systemUTC();
+                sender.sendMessage(String.format("System time set to %s (UTC)", LocalTime.now(systemClock)));
+            } else {
+                // Sets a fake system clock to a given time (UTC). It does not change the system time.
+                var time = value.split(":");
+                if (time.length < 2 || time.length > 3) {
+                    sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                    return;
+                }
+
+                try {
+                    var hour = Integer.parseInt(time[0]);
+                    var minute = Integer.parseInt(time[1]);
+
+                    // Seconds are optional
+                    var second = 0;
+                    if (time.length == 3) {
+                        second = Integer.parseInt(time[2]);
+                    }
+
+                    // Data validation
+                    if (hour < 0 || hour > 24) {
+                        sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                        return;
+                    }
+
+                    if (minute < 0 || minute >= 60) {
+                        sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                        return;
+                    }
+
+                    if (second < 0 || second >= 60) {
+                        // There is the leap second thing in UTC, but I am going to ignore it for now...
+                        sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                        return;
+                    }
+
+                    var now = LocalTime.now(ZoneOffset.UTC);
+                    var then = LocalTime.of(hour, minute, second);
+                    systemClock = Clock.offset(Clock.systemUTC(), Duration.between(now, then));
+
+                    sender.sendMessage(String.format("System time set to %s (UTC)", then));
+                } catch (NumberFormatException e) {
+                    sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                }
+            }
+
+            synchronizeTimeNow();
+        }
+    }
+
+    private void parseContinueCommand(CommandSender sender) {
+        if (syncPaused) {
+            startTimeSynchronization();
+            sender.sendMessage("Time synchronization restarted");
+        } else {
+            sender.sendMessage("Time synchronization is already running!");
+        }
+    }
+
+    private void parsePauseCommand(CommandSender sender) {
+        if (syncPaused) {
+            sender.sendMessage("Time synchronization is already paused!");
+        } else {
+            stopTimeSynchronization();
+            sender.sendMessage("Time synchronization paused");
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -576,5 +546,9 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         boolean getDebugMode() { return debugMode; }
 
         void setDebugMode(boolean mode) { this.debugMode = mode; }
+    }
+
+    private interface ParameterParser {
+        void parse(CommandSender sender, List<String> arguments);
     }
 }

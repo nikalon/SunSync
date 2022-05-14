@@ -4,5 +4,5 @@ main: com.github.nikalon.sunsync.SunSync
 api-version: 1.18
 commands:
   timesync:
-    description: Change or query SunSync parameters
-    usage: "Usage: /<command> [get parameter | set parameter value | pause | continue]"
+    description: Query or change SunSync options
+    usage: "Usage: /<command> [location|syncIntervalSec|clock|debugMode|continue|pause] <value>"
