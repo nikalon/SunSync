@@ -134,26 +134,17 @@ class Sun {
             return new GeographicCoordinate(0.0, 0.0);
         }
 
-        static GeographicCoordinate from(double latitude, double longitude) throws InvalidGeographicCoordinateException {
-            if (latitude < -90.0 || latitude > 90.0) {
-                throw new InvalidGeographicCoordinateException("Invalid latitude value: " + latitude + ". Only decimal degrees between -90.0 and 90.0 are valid.");
-            }
+        static GeographicCoordinate fromDecimalDegrees(double latitude, double longitude) { return new GeographicCoordinate(latitude, longitude); }
 
-            if (longitude < -180.0 || longitude > 180.0) {
-                throw new InvalidGeographicCoordinateException("Invalid longitude value: " + latitude + ". Only decimal degrees between -180.0 and 180.0 are valid.");
-            }
-
-            return new GeographicCoordinate(latitude, longitude);
+        static GeographicCoordinate fromSexagesimalDegrees(double northDegrees, double northArcMinutes, double northArcSeconds, double westDegrees, double westArcMinutes, double westArcSeconds) {
+            // Convert sexagesimal degrees to decimal degrees
+            double latitude = northDegrees + northArcMinutes/60 + northArcSeconds/3600;
+            double longitude = westDegrees + westArcMinutes/60 + westArcSeconds/3600;
+            return GeographicCoordinate.fromDecimalDegrees(latitude, longitude);
         }
 
         public String toString() {
             return String.format("(%f, %f)", latitude, longitude);
-        }
-
-        static class InvalidGeographicCoordinateException extends Exception {
-            public InvalidGeographicCoordinateException(String message) {
-                super(message);
-            }
         }
     }
 

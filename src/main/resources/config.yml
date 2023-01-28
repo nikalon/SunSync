@@ -1,6 +1,7 @@
-# Geographic coordinates. Defaults to "auto".
-location: auto # Automatic detection of geographic location
-# location: "-60.0, 170.0" # Decimal coordinates as latitude and longitude, respectively
+# Geographic coordinates. Defaults to "auto". Examples:
+location: auto                          # Automatic detection of geographic location
+# location: -60.5, 170.21               # Decimal coordinates as latitude and longitude, respectively
+# location: 35°40'06.0"N 139°34'33.9"E  # Sexagesimal coordinates
 
 # Sets the frequency of time synchronization.
 # Integer value in seconds. Allowed values: from 1 to 1800, both included. Defaults to 5.

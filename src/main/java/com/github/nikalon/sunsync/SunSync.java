@@ -33,7 +33,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import com.github.nikalon.sunsync.Sun.GeographicCoordinate;
-import com.github.nikalon.sunsync.Sun.GeographicCoordinate.InvalidGeographicCoordinateException;
 import com.github.nikalon.sunsync.Sun.NeverRaisesException;
 import com.github.nikalon.sunsync.Sun.NeverSetsException;
 import com.github.nikalon.sunsync.Sun.RiseAndSet;
@@ -189,7 +188,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         commandParameters.put("continue", (sender, args) -> parseContinueCommand(sender));
         commandParameters.put("pause", (sender, args) -> parsePauseCommand(sender));
 
-        commandTabCompletion = new ArrayList();
+        commandTabCompletion = new ArrayList<String>();
         for (String key : commandParameters.keySet()) {
             commandTabCompletion.add(key);
         }
@@ -495,6 +494,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         private static final long SYNCHRONIZATION_INTERVAL_MAX_VALUE        = 1800L;
         private static final boolean DEBUG_MODE_DEFAULT                     = false;
         private static final Pattern REGEX_DECIMAL_DEGREES                  = Pattern.compile("(?<latitude>-?\\d+(?:\\.\\d+)?)\\s*,?\\s*(?<longitude>-?\\d+(?:\\.\\d+)?)");
+        private static final Pattern REGEX_SEXAGESIMAL_DEGREES              = Pattern.compile("(?<LatDeg>\\d+)°(?: *(?<LatArcMin>\\d+)')?(?: *(?<LatArcSec>\\d+(?:\\.\\d+)?)\")? *(?<LatDirection>[NS])\\s*,?\\s*(?<LonDeg>\\d+)°(?: *(?<LonArcMin>\\d+)')?(?: *(?<LonArcSec>\\d+(?:\\.\\d+)?)\")? *(?<LonDirection>[EW])");
 
         private String location;
         private long syncIntervalSeconds;
@@ -517,14 +517,12 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                     try {
                         float latitude = Float.parseFloat(matcher.group("latitude"));
                         float longitude = Float.parseFloat(matcher.group("longitude"));
-                        GeographicCoordinate coordinates = GeographicCoordinate.from(latitude, longitude);
+                        GeographicCoordinate coordinates = GeographicCoordinate.fromDecimalDegrees(latitude, longitude);
 
                         this.worldRegions.put(region, coordinates);
                         totalParsedRegions += 1;
                     } catch (NumberFormatException ignored) {
                         logger.warning(String.format("Parse error when processing geographic coordinates for \"%s\" region ", region));
-                    } catch (InvalidGeographicCoordinateException ignored) {
-                        logger.warning(String.format("Invalid coordinates for \"%s\" region", region));
                     }
                 }
             }
@@ -571,39 +569,89 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 return this.worldRegions.getOrDefault(systemRegion, defaultCoordinates);
             } else {
                 // Try parse as decimal degrees
-                var matcher = REGEX_DECIMAL_DEGREES.matcher(location);
-                if (matcher.matches()) {
+                var decimalMatcher = REGEX_DECIMAL_DEGREES.matcher(location);
+                if (decimalMatcher.matches()) {
                     try {
-                        float latitude = Float.parseFloat(matcher.group("latitude"));
-                        float longitude = Float.parseFloat(matcher.group("longitude"));
-                        return GeographicCoordinate.from(latitude, longitude);
+                        float latitude = Float.parseFloat(decimalMatcher.group("latitude"));
+                        float longitude = Float.parseFloat(decimalMatcher.group("longitude"));
+                        return GeographicCoordinate.fromDecimalDegrees(latitude, longitude);
                     } catch (NumberFormatException ignored) {
-                        // Ignored
-                    } catch (InvalidGeographicCoordinateException ignored) {
                         // Ignored
                     }
                 }
 
-                // TODO: Try parse as sexagesimal degrees
+                // Try parse as sexagesimal degrees
+                var sexagesimalMatcher = REGEX_SEXAGESIMAL_DEGREES.matcher(location);
+                if (sexagesimalMatcher.matches()) {
+                    try {
+                        // Latitude
+                        String latDirection = sexagesimalMatcher.group("LatDirection");
+                        float latDegrees = Float.parseFloat(sexagesimalMatcher.group("LatDeg"));
+                        float latArcMin = 0.0f;
+                        float latArcSec = 0.0f;
+
+                        String LatArcMin = sexagesimalMatcher.group("LatArcMin");
+                        if (LatArcMin != null) {
+                            latArcMin = Float.parseFloat(LatArcMin);
+                        }
+
+                        String LatArcSec = sexagesimalMatcher.group("LatArcSec");
+                        if (LatArcSec != null) {
+                            latArcSec = Float.parseFloat(LatArcSec);
+                        }
+
+                        if (latDirection.equals("S")) {
+                            // South latitude
+                            latDegrees *= -1;
+                            latArcMin *= -1;
+                            latArcSec *= -1;
+                        }
+
+                        // Longitude
+                        String lonDirection = sexagesimalMatcher.group("LonDirection");
+                        float lonDegrees = Float.parseFloat(sexagesimalMatcher.group("LonDeg"));
+                        float lonArcMin = 0.0f;
+                        float lonArcSec = 0.0f;
+
+                        String LonArcMin = sexagesimalMatcher.group("LonArcMin");
+                        if (LonArcMin != null) {
+                            lonArcMin = Float.parseFloat(LonArcMin);
+                        }
+
+                        String LonArcSec = sexagesimalMatcher.group("LonArcSec");
+                        if (LonArcSec != null) {
+                            lonArcSec = Float.parseFloat(LonArcSec);
+                        }
+
+                        if (lonDirection.equals("W")) {
+                            // West longitude
+                            lonDegrees *= -1;
+                            lonArcMin *= -1;
+                            lonArcSec *= -1;
+                        }
+
+                        return GeographicCoordinate.fromSexagesimalDegrees(latDegrees, latArcMin, latArcSec,
+                                                                           lonDegrees, lonArcMin, lonArcSec);
+                    } catch (NumberFormatException ignored) {
+                        // Ignored
+                    }
+                }
             }
 
-            return GeographicCoordinate.defaultCoordinate();
+            return null;
         }
 
         private boolean isValidLocation(String location) {
             if (location.equals("auto")) {
                 return true;
             } else {
-                // Check as decimal degrees
-                var matcher = REGEX_DECIMAL_DEGREES.matcher(location);
-                if (matcher.matches()) {
-                    return true;
-                }
+                var coordinates = parseLocationOption(location);
+                if (coordinates == null) { return false; }
+                if (coordinates.latitude < -90.0f || coordinates.latitude > 90.0f) { return false; }
+                if (coordinates.longitude < -180.0f || coordinates.longitude > 180.0f) { return false; }
 
-                // TODO: Check as sexagesimal degrees
+                return true;
             }
-
-            return false;
         }
 
         long getSynchronizationIntervalSeconds() { return syncIntervalSeconds; }
