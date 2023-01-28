@@ -1,5 +1,20 @@
 package com.github.nikalon.sunsync;
 
+import java.io.IOException;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.regex.Pattern;
+
 import org.bukkit.Bukkit;
 import org.bukkit.GameRule;
 import org.bukkit.command.Command;
@@ -17,18 +32,11 @@ import org.bukkit.event.world.TimeSkipEvent.SkipReason;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.time.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Hashtable;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Pattern;
-
+import com.github.nikalon.sunsync.Sun.GeographicCoordinate;
 import com.github.nikalon.sunsync.Sun.GeographicCoordinate.InvalidGeographicCoordinateException;
-
-import static com.github.nikalon.sunsync.Sun.*;
+import com.github.nikalon.sunsync.Sun.NeverRaisesException;
+import com.github.nikalon.sunsync.Sun.NeverSetsException;
+import com.github.nikalon.sunsync.Sun.RiseAndSet;
 
 public class SunSync extends JavaPlugin implements Runnable, Listener {
     private static final long ONE_SECOND_IN_MINECRAFT_TICKS = 20L;
@@ -94,9 +102,9 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             if (lastUpdated == null || now.toLocalDate().isAfter(lastUpdated)) {
                 // Cache calculations until 23:59:59 (UTC)
                 lastUpdated = now.toLocalDate();
-                todayEvents = Sun.sunriseAndSunsetTimes(configuration.getLocation(), now.toLocalDate());
-                yesterdayEvents = Sun.sunriseAndSunsetTimes(configuration.getLocation(), now.minusDays(1).toLocalDate());
-                tomorrowEvents = Sun.sunriseAndSunsetTimes(configuration.getLocation(), now.plusDays(1).toLocalDate());
+                todayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.toLocalDate());
+                yesterdayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.minusDays(1).toLocalDate());
+                tomorrowEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.plusDays(1).toLocalDate());
 
                 debugLog(String.format("Yesterday the Sun rose at %s (UTC), set at %s (UTC)", yesterdayEvents.riseUTCTime, yesterdayEvents.setUTCTime));
                 debugLog(String.format("Today's events -> rise at %s (UTC), set at %s (UTC)", todayEvents.riseUTCTime, todayEvents.setUTCTime));
@@ -161,10 +169,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         conFile.set("debug_mode", configuration.getDebugMode());
 
         // Location
-        var coordinates = new ArrayList<Double>();
-        coordinates.add(configuration.getLocation().latitude);
-        coordinates.add(configuration.getLocation().longitude);
-        conFile.set("location", coordinates);
+        conFile.set("location", configuration.getLocation());
 
         // Synchronization interval
         conFile.set("synchronization_interval_seconds", configuration.getSynchronizationIntervalSeconds());
@@ -208,18 +213,13 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             logger.warning("debug mode is enabled. To disable debug mode set the option \"debug_mode\" to false in config.yml and restart the server.");
         }
 
-        // Location on Earth
-        List<Double> geo = configFile.getDoubleList("location");
-        if (geo == null || geo.size() != 2) {
-            logger.severe("\"location\" value in config.yml is invalid, using default values. Please, use decimal values between -90.0 and 90.0 degrees (latitude) and -180.0 and 180 degrees (longitude).");
-        } else {
-            try {
-                configuration.setLocation(GeographicCoordinate.from(geo.get(0), geo.get(1)));
-            } catch (InvalidGeographicCoordinateException e) {
-                logger.severe("\"location\" value in config.yml is invalid, using default values. Please, use decimal values between -90.0 and 90.0 degrees.");
-            }
+        // Geographic coordinates
+        String defaultValue = "auto";
+        String location = configFile.getString("location", defaultValue);
+        if (!configuration.setLocation(location)) {
+            logger.severe("\"location\" value in config.yml is invalid, using default coordinates. Please, set a valid geographic coordinate or \"auto\"");
         }
-        debugLog(String.format("Using geographic coordinates: %s", configuration.getLocation()));
+        debugLog(String.format("Using geographic coordinates: %s", configuration.getGeographicCoordinates()));
 
         // Synchronization interval
         long sync_interval = configFile.getLong("synchronization_interval_seconds", -1);
@@ -283,28 +283,13 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     }
 
     private void parseLocationCommand(CommandSender sender, List<String> args) {
-        String value = null;
-        if (args.size() >= 1) value = args.get(0);
-
-        if (value == null) {
-            sender.sendMessage(String.format("Current location is %s", configuration.getLocation()));
+        if (args.size() == 0) {
+            // Get location
+            sender.sendMessage(String.format("Current location is %s", configuration.getGeographicCoordinates()));
         } else {
-            if (args.size() < 2) {
-                // A geographic coordinate needs two values: longitude and latitude
-                sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
-                return;
-            }
-
-            var value2 = args.get(1);
-            double latitude;
-            double longitude;
-
-            try {
-                latitude = Double.parseDouble(value);
-                longitude = Double.parseDouble(value2);
-                var loc = GeographicCoordinate.from(latitude, longitude);
-                configuration.setLocation(loc);
-
+            // Set location
+            String location = String.join(" ", args);
+            if (configuration.setLocation(location)) {
                 // Force to recalculate sunrise and sunset times
                 lastUpdated = null;
                 todayEvents = null;
@@ -312,11 +297,9 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 tomorrowEvents = null;
 
                 synchronizeTimeNow();
-                sender.sendMessage(String.format("Location set to %s", loc));
-            } catch (NumberFormatException e) {
-                sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
-            } catch (GeographicCoordinate.InvalidGeographicCoordinateException e) {
-                sender.sendMessage("Invalid coordinates. Please, enter a valid longitude and latitude as decimals");
+                sender.sendMessage(String.format("Location set to %s", configuration.getGeographicCoordinates()));
+            } else {
+                sender.sendMessage("Invalid coordinates. Please, set a valid geographic coordinate or \"auto\"");
             }
         }
     }
@@ -511,24 +494,117 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         private static final long SYNCHRONIZATION_INTERVAL_MIN_VALUE        = 1L;
         private static final long SYNCHRONIZATION_INTERVAL_MAX_VALUE        = 1800L;
         private static final boolean DEBUG_MODE_DEFAULT                     = false;
+        private static final Pattern REGEX_DECIMAL_DEGREES                  = Pattern.compile("(?<latitude>-?\\d+(?:\\.\\d+)?)\\s*,?\\s*(?<longitude>-?\\d+(?:\\.\\d+)?)");
 
-        private GeographicCoordinate location;
+        private String location;
         private long syncIntervalSeconds;
         private boolean debugMode;
+        private GeographicCoordinate geographicCoordinates;
+        private Hashtable<String, GeographicCoordinate> worldRegions;
 
         Configuration() {
-            this.location = GeographicCoordinate.defaultCoordinate();
+            this.worldRegions = new Hashtable<>();
+
+            // Parse regions.csv
+            var pattern = Pattern.compile("(?<region>\\w+),Point\\((?<longitude>-?\\d+(?:\\.\\d+)?) (?<latitude>-?\\d+(?:\\.\\d+)?)\\)");
+            var regionsFile = readEntireFile("regions.csv");
+            var lines = regionsFile.split("\n");
+            var totalParsedRegions = 0;
+            for (String line : lines) {
+                var matcher = pattern.matcher(line);
+                if (matcher.find()) {
+                    String region = matcher.group("region");
+                    try {
+                        float latitude = Float.parseFloat(matcher.group("latitude"));
+                        float longitude = Float.parseFloat(matcher.group("longitude"));
+                        GeographicCoordinate coordinates = GeographicCoordinate.from(latitude, longitude);
+
+                        this.worldRegions.put(region, coordinates);
+                        totalParsedRegions += 1;
+                    } catch (NumberFormatException ignored) {
+                        logger.warning(String.format("Parse error when processing geographic coordinates for \"%s\" region ", region));
+                    } catch (InvalidGeographicCoordinateException ignored) {
+                        logger.warning(String.format("Invalid coordinates for \"%s\" region", region));
+                    }
+                }
+            }
+            logger.info(String.format("Parsed %d regions from regions.csv", totalParsedRegions));
+
+            this.location = "auto";
+            this.geographicCoordinates = parseLocationOption(this.location);
             this.syncIntervalSeconds = SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT;
             this.debugMode = DEBUG_MODE_DEFAULT;
+        }
+
+        private String readEntireFile(String file) {
+            try {
+                var data = getResource(file).readAllBytes();
+                return new String(data);
+            } catch (IOException e) {
+                return "";
+            }
         }
 
         static long getSyncIntervalLowestValidValue() { return SYNCHRONIZATION_INTERVAL_MIN_VALUE; }
 
         static long getSyncIntervalHighestValidValue() { return SYNCHRONIZATION_INTERVAL_MAX_VALUE; }
 
-        GeographicCoordinate getLocation() { return location; }
+        String getLocation() { return this.location; }
 
-        void setLocation(GeographicCoordinate newLocation) { this.location = newLocation; }
+        GeographicCoordinate getGeographicCoordinates() { return this.geographicCoordinates; }
+
+        boolean setLocation(String newLocation) {
+            if (isValidLocation(newLocation)) {
+                this.location = newLocation;
+                this.geographicCoordinates = parseLocationOption(newLocation);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        private GeographicCoordinate parseLocationOption(String location) {
+            if (location.equals("auto")) {
+                // Automatically detect geographic coordinates based on some heuristics
+                var systemRegion = System.getProperty("user.country");
+                var defaultCoordinates = GeographicCoordinate.defaultCoordinate();
+                return this.worldRegions.getOrDefault(systemRegion, defaultCoordinates);
+            } else {
+                // Try parse as decimal degrees
+                var matcher = REGEX_DECIMAL_DEGREES.matcher(location);
+                if (matcher.matches()) {
+                    try {
+                        float latitude = Float.parseFloat(matcher.group("latitude"));
+                        float longitude = Float.parseFloat(matcher.group("longitude"));
+                        return GeographicCoordinate.from(latitude, longitude);
+                    } catch (NumberFormatException ignored) {
+                        // Ignored
+                    } catch (InvalidGeographicCoordinateException ignored) {
+                        // Ignored
+                    }
+                }
+
+                // TODO: Try parse as sexagesimal degrees
+            }
+
+            return GeographicCoordinate.defaultCoordinate();
+        }
+
+        private boolean isValidLocation(String location) {
+            if (location.equals("auto")) {
+                return true;
+            } else {
+                // Check as decimal degrees
+                var matcher = REGEX_DECIMAL_DEGREES.matcher(location);
+                if (matcher.matches()) {
+                    return true;
+                }
+
+                // TODO: Check as sexagesimal degrees
+            }
+
+            return false;
+        }
 
         long getSynchronizationIntervalSeconds() { return syncIntervalSeconds; }
 
