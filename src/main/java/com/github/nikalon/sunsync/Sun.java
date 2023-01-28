@@ -15,8 +15,8 @@ class Sun {
     private Sun() {} // Disallow instantiation
 
     private static double modulo(double dividend, double divisor) {
-        // Modulo defined as floor division, where the sign is determined by the divisor. I couldn't find a similar
-        // method in the standard library, so I write my own.
+        // Modulo defined as floor division, where the sign is determined by the divisor. I couldn't be able find a
+        // similar method in the standard library, so I write my own.
         return dividend - divisor * Math.floor(dividend / divisor);
     }
 
