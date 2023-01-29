@@ -1,8 +1,11 @@
 package com.github.nikalon.sunsync;
 
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Locale;
 
 class Sun {
     // Acronyms used:
@@ -138,13 +141,14 @@ class Sun {
 
         static GeographicCoordinate fromSexagesimalDegrees(double northDegrees, double northArcMinutes, double northArcSeconds, double westDegrees, double westArcMinutes, double westArcSeconds) {
             // Convert sexagesimal degrees to decimal degrees
-            double latitude = northDegrees + northArcMinutes/60 + northArcSeconds/3600;
-            double longitude = westDegrees + westArcMinutes/60 + westArcSeconds/3600;
+            double latitude = northDegrees + northArcMinutes/60.0d + northArcSeconds/3600.0d;
+            double longitude = westDegrees + westArcMinutes/60.0d + westArcSeconds/3600.0d;
             return GeographicCoordinate.fromDecimalDegrees(latitude, longitude);
         }
 
         public String toString() {
-            return String.format("(%f, %f)", latitude, longitude);
+            var fmt = new DecimalFormat("0.0#####", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+            return String.format(Locale.ENGLISH, "%s, %s", fmt.format(latitude), fmt.format(longitude));
         }
     }
 

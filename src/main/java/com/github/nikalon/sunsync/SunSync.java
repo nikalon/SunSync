@@ -515,8 +515,8 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 if (matcher.find()) {
                     String region = matcher.group("region");
                     try {
-                        float latitude = Float.parseFloat(matcher.group("latitude"));
-                        float longitude = Float.parseFloat(matcher.group("longitude"));
+                        double latitude = Double.parseDouble(matcher.group("latitude"));
+                        double longitude = Double.parseDouble(matcher.group("longitude"));
                         GeographicCoordinate coordinates = GeographicCoordinate.fromDecimalDegrees(latitude, longitude);
 
                         this.worldRegions.put(region, coordinates);
@@ -572,8 +572,8 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 var decimalMatcher = REGEX_DECIMAL_DEGREES.matcher(location);
                 if (decimalMatcher.matches()) {
                     try {
-                        float latitude = Float.parseFloat(decimalMatcher.group("latitude"));
-                        float longitude = Float.parseFloat(decimalMatcher.group("longitude"));
+                        double latitude = Double.parseDouble(decimalMatcher.group("latitude"));
+                        double longitude = Double.parseDouble(decimalMatcher.group("longitude"));
                         return GeographicCoordinate.fromDecimalDegrees(latitude, longitude);
                     } catch (NumberFormatException ignored) {
                         // Ignored
@@ -586,18 +586,18 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                     try {
                         // Latitude
                         String latDirection = sexagesimalMatcher.group("LatDirection");
-                        float latDegrees = Float.parseFloat(sexagesimalMatcher.group("LatDeg"));
-                        float latArcMin = 0.0f;
-                        float latArcSec = 0.0f;
+                        double latDegrees = Double.parseDouble(sexagesimalMatcher.group("LatDeg"));
+                        double latArcMin = 0.0f;
+                        double latArcSec = 0.0f;
 
                         String LatArcMin = sexagesimalMatcher.group("LatArcMin");
                         if (LatArcMin != null) {
-                            latArcMin = Float.parseFloat(LatArcMin);
+                            latArcMin = Double.parseDouble(LatArcMin);
                         }
 
                         String LatArcSec = sexagesimalMatcher.group("LatArcSec");
                         if (LatArcSec != null) {
-                            latArcSec = Float.parseFloat(LatArcSec);
+                            latArcSec = Double.parseDouble(LatArcSec);
                         }
 
                         if (latDirection.equals("S")) {
@@ -609,18 +609,18 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
                         // Longitude
                         String lonDirection = sexagesimalMatcher.group("LonDirection");
-                        float lonDegrees = Float.parseFloat(sexagesimalMatcher.group("LonDeg"));
-                        float lonArcMin = 0.0f;
-                        float lonArcSec = 0.0f;
+                        double lonDegrees = Double.parseDouble(sexagesimalMatcher.group("LonDeg"));
+                        double lonArcMin = 0.0f;
+                        double lonArcSec = 0.0f;
 
                         String LonArcMin = sexagesimalMatcher.group("LonArcMin");
                         if (LonArcMin != null) {
-                            lonArcMin = Float.parseFloat(LonArcMin);
+                            lonArcMin = Double.parseDouble(LonArcMin);
                         }
 
                         String LonArcSec = sexagesimalMatcher.group("LonArcSec");
                         if (LonArcSec != null) {
-                            lonArcSec = Float.parseFloat(LonArcSec);
+                            lonArcSec = Double.parseDouble(LonArcSec);
                         }
 
                         if (lonDirection.equals("W")) {
