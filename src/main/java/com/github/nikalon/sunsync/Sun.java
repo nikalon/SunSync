@@ -61,6 +61,11 @@ class Sun {
         int minute = (int) minute_d; // truncate integer part
         int second = (int) Math.round(second_d);
 
+        // Handle special case for rounding error
+        if (second == 60) {
+            second = 59;
+        }
+
         return LocalTime.of(hour, minute, second);
     }
 
