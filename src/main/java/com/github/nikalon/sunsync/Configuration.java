@@ -6,8 +6,6 @@ import java.util.Hashtable;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
-import org.bukkit.plugin.Plugin;
-
 import com.github.nikalon.sunsync.Sun.GeographicCoordinate;
 
 class Configuration {
