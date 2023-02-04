@@ -6,3 +6,4 @@ commands:
   timesync:
     description: Query or change SunSync options
     usage: "Usage: /<command> [location|syncIntervalSec|clock|debugMode|continue|pause] <value>"
+depend: [ ProtocolLib ]

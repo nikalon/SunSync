@@ -1,6 +1,5 @@
 package com.github.nikalon.sunsync;
 
-import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -16,7 +15,6 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 import org.bukkit.Bukkit;
-import org.bukkit.GameRule;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -32,7 +30,12 @@ import org.bukkit.event.world.TimeSkipEvent.SkipReason;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import com.github.nikalon.sunsync.Sun.GeographicCoordinate;
+import com.comphenix.protocol.PacketType;
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.ProtocolManager;
+import com.comphenix.protocol.events.ListenerPriority;
+import com.comphenix.protocol.events.PacketAdapter;
+import com.comphenix.protocol.events.PacketEvent;
 import com.github.nikalon.sunsync.Sun.NeverRaisesException;
 import com.github.nikalon.sunsync.Sun.NeverSetsException;
 import com.github.nikalon.sunsync.Sun.RiseAndSet;
@@ -53,10 +56,13 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     private Configuration configuration;
     private Clock systemClock;
+    private long currentMinecraftTime;
     private boolean syncPaused;
 
     private BukkitTask task;
     private Logger logger;
+    private ProtocolManager protocolManager;
+    private PacketAdapter packetPlayOutUpdateTimeListener;
 
     private LocalDate lastUpdated; // Used to cache sunrise and sunset calculations for a day
     private RiseAndSet todayEvents;
@@ -69,6 +75,10 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     private void startTimeSynchronization() {
         stopTimeSynchronization();
+        if (task != null) {
+            task.cancel();
+            task = null;
+        }
         task = Bukkit.getScheduler().runTaskTimer(this, this, 0, configuration.getSynchronizationIntervalSeconds() * ONE_SECOND_IN_MINECRAFT_TICKS);
         syncPaused = false;
         debugLog("Started/Restarted time synchronization");
@@ -76,10 +86,6 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     private void stopTimeSynchronization() {
         syncPaused = true;
-        if (task != null) {
-            task.cancel();
-            task = null;
-        }
         debugLog("Time synchronization stopped");
     }
 
@@ -94,71 +100,72 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private void synchronizeTimeOnce() {
         // Whenever the term "event" is used it means either the sunrise or sunset in the real world
 
-        LocalDateTime now = LocalDateTime.now(systemClock);
-        debugLog(String.format("The time is %s (UTC)", now.toLocalTime()));
+        if (! this.syncPaused) {
+            LocalDateTime now = LocalDateTime.now(systemClock);
+            debugLog(String.format("The time is %s (UTC)", now.toLocalTime()));
 
-        try {
-            if (lastUpdated == null || now.toLocalDate().isAfter(lastUpdated)) {
-                // Cache calculations until 23:59:59 (UTC)
-                lastUpdated = now.toLocalDate();
-                todayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.toLocalDate());
-                yesterdayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.minusDays(1).toLocalDate());
-                tomorrowEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.plusDays(1).toLocalDate());
+            try {
+                if (lastUpdated == null || now.toLocalDate().isAfter(lastUpdated)) {
+                    // Cache calculations until 23:59:59 (UTC)
+                    lastUpdated = now.toLocalDate();
+                    todayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.toLocalDate());
+                    yesterdayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.minusDays(1).toLocalDate());
+                    tomorrowEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.plusDays(1).toLocalDate());
 
-                debugLog(String.format("Yesterday the Sun rose at %s (UTC), set at %s (UTC)", yesterdayEvents.riseUTCTime, yesterdayEvents.setUTCTime));
-                debugLog(String.format("Today's events -> rise at %s (UTC), set at %s (UTC)", todayEvents.riseUTCTime, todayEvents.setUTCTime));
-                debugLog(String.format("Tomorrow's events -> rise at %s (UTC), set at %s (UTC)", tomorrowEvents.riseUTCTime, tomorrowEvents.setUTCTime));
+                    debugLog(String.format("Yesterday the Sun rose at %s (UTC), set at %s (UTC)", yesterdayEvents.riseUTCTime, yesterdayEvents.setUTCTime));
+                    debugLog(String.format("Today's events -> rise at %s (UTC), set at %s (UTC)", todayEvents.riseUTCTime, todayEvents.setUTCTime));
+                    debugLog(String.format("Tomorrow's events -> rise at %s (UTC), set at %s (UTC)", tomorrowEvents.riseUTCTime, tomorrowEvents.setUTCTime));
+                }
+            } catch (NeverRaisesException e) {
+                Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDNIGHT_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
+                logger.warning(String.format("The Sun will not rise today. Setting game time to midnight (Minecraft time %d).", MINECRAFT_MIDNIGHT_TICKS));
+                debugLog(String.format("All worlds synchronized to Minecraft time %d", MINECRAFT_MIDNIGHT_TICKS));
+                return;
+            } catch (NeverSetsException e) {
+                Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDDAY_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
+                logger.warning(String.format("The Sun will not set today. Setting game time to midday (Minecraft time %d).", MINECRAFT_MIDDAY_TICKS));
+                debugLog(String.format("All worlds synchronized to Minecraft time %d", MINECRAFT_MIDDAY_TICKS));
+                return;
             }
-        } catch (NeverRaisesException e) {
-            Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDNIGHT_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-            logger.warning(String.format("The Sun will not rise today. Setting game time to midnight (Minecraft time %d).", MINECRAFT_MIDNIGHT_TICKS));
-            debugLog(String.format("All worlds synchronized to Minecraft time %d", MINECRAFT_MIDNIGHT_TICKS));
-            return;
-        } catch (NeverSetsException e) {
-            Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDDAY_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-            logger.warning(String.format("The Sun will not set today. Setting game time to midday (Minecraft time %d).", MINECRAFT_MIDDAY_TICKS));
-            debugLog(String.format("All worlds synchronized to Minecraft time %d", MINECRAFT_MIDDAY_TICKS));
-            return;
+
+            // Error condition reached. The Sun will not rise or will not set today. Skipping time synchronization...
+            if (yesterdayEvents == null || todayEvents == null || tomorrowEvents == null) return;
+
+            // Figures out if it's daytime or nighttime right now
+            LocalDateTime last_event_time;
+            LocalDateTime next_event_time;
+            boolean is_daytime;
+            if (now.isBefore(todayEvents.riseUTCTime)) {
+                // Nighttime. Last event was yesterday's sunset. Next event is today's sunrise.
+                is_daytime = false;
+                last_event_time = yesterdayEvents.setUTCTime;
+                next_event_time = todayEvents.riseUTCTime;
+            } else if (now.isAfter(todayEvents.setUTCTime)) {
+                // Nighttime. Last event was today's sunset. Next event is tomorrow's sunrise.
+                is_daytime = false;
+                last_event_time = todayEvents.setUTCTime;
+                next_event_time = tomorrowEvents.riseUTCTime;
+            } else {
+                // Daytime. Last event was today's sunrise. Next event is today's sunset.
+                is_daytime = true;
+                last_event_time = todayEvents.riseUTCTime;
+                next_event_time = todayEvents.setUTCTime;
+            }
+
+            double event_interval_duration = Duration.between(last_event_time, next_event_time).getSeconds();
+            // Time elapsed since the last event
+            double delta_time = Duration.between(last_event_time, now).getSeconds();
+
+            // Apply a linear interpolation between the last and next event times. Then, convert it into a Minecraft time.
+            if (is_daytime) {
+                this.currentMinecraftTime = (long) ((MINECRAFT_DAY_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNRISE_START_TICKS);
+            } else {
+                this.currentMinecraftTime = (long) ((MINECRAFT_NIGHT_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNSET_START_TICKS);
+            }
         }
 
-        // Error condition reached. The Sun will not rise or will not set today. Skipping time synchronization...
-        if (yesterdayEvents == null || todayEvents == null || tomorrowEvents == null) return;
-
-        // Figures out if it's daytime or nighttime right now
-        LocalDateTime last_event_time;
-        LocalDateTime next_event_time;
-        boolean is_daytime;
-        if (now.isBefore(todayEvents.riseUTCTime)) {
-            // Nighttime. Last event was yesterday's sunset. Next event is today's sunrise.
-            is_daytime = false;
-            last_event_time = yesterdayEvents.setUTCTime;
-            next_event_time = todayEvents.riseUTCTime;
-        } else if (now.isAfter(todayEvents.setUTCTime)) {
-            // Nighttime. Last event was today's sunset. Next event is tomorrow's sunrise.
-            is_daytime = false;
-            last_event_time = todayEvents.setUTCTime;
-            next_event_time = tomorrowEvents.riseUTCTime;
-        } else {
-            // Daytime. Last event was today's sunrise. Next event is today's sunset.
-            is_daytime = true;
-            last_event_time = todayEvents.riseUTCTime;
-            next_event_time = todayEvents.setUTCTime;
-        }
-
-        double event_interval_duration = Duration.between(last_event_time, next_event_time).getSeconds();
-        // Time elapsed since the last event
-        double delta_time = Duration.between(last_event_time, now).getSeconds();
-
-        // Apply a linear interpolation between the last and next event times. Then, convert it into a Minecraft time.
-        long minecraft_time;
-        if (is_daytime) {
-            minecraft_time = (long) ((MINECRAFT_DAY_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNRISE_START_TICKS);
-        } else {
-            minecraft_time = (long) ((MINECRAFT_NIGHT_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNSET_START_TICKS);
-        }
-
-        Bukkit.getWorlds().forEach((world) -> world.setTime(minecraft_time)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-        debugLog(String.format("All worlds synchronized to Minecraft time %d", minecraft_time));
+        Bukkit.getWorlds().forEach((world) -> world.setTime(this.currentMinecraftTime)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
+        debugLog(String.format("All worlds synchronized to Minecraft time %d", this.currentMinecraftTime));
     }
 
     private void saveConfiguration() {
@@ -179,6 +186,43 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public void onLoad() {
+        this.protocolManager = ProtocolLibrary.getProtocolManager();
+        this.packetPlayOutUpdateTimeListener = new PacketAdapter(
+            this,
+            ListenerPriority.HIGHEST,
+            PacketType.Play.Server.UPDATE_TIME
+        ) {
+            /*
+                This plugin listens for all outgoing time update packets and makes modifications in some circumstances.
+                The purpose of this modification is to resolve a jittering Sun bug when the gamerule doDaylightCycle is
+                set to true.
+
+                Initially, the idea was to enforce the doDaylightCycle gamerule to be false as long as the plugin is
+                active and running on the server. However, this approach had two drawbacks:
+
+                1. Silently modifying server settings could result in confusion among server administrators.
+                2. The Spigot API doesn't support listening for gamerule modifications. So whenever a player changes
+                   the doDaylightCycle to true this plugin will never notice.
+
+                To fix the jittering Sun bug, the plugin uses ProtocolLib to modify all outgoing time update packets
+                without touching the doDaylightCycle gamerule. The Minecraft client determines the value of the gamerule
+                based on the sign of the time received. If a negative time is received, the client considers doDaylightCycle
+                to be false, while a positive time indicates that doDaylightCycle is true. Here we ensure that all
+                packets are always negative signed.
+            */
+            @Override
+            public void onPacketSending(PacketEvent event) {
+                final int TIME_OF_DAY_FIELD = 1;
+                var fields = event.getPacket().getLongs();
+                var timeOfDay = fields.read(TIME_OF_DAY_FIELD);
+                if (timeOfDay >= 0) {
+                    // The gamerule doDaylightCycle is set to true. Change the sign of the time to make the client
+                    // believe that the gamerule is set to false
+                    fields.write(TIME_OF_DAY_FIELD, -currentMinecraftTime);
+                }
+            }
+        };
+
         // Setup /timesync command
         commandParameters = new Hashtable<>();
         commandParameters.put("location", (sender, args) -> parseLocationCommand(sender, args));
@@ -231,12 +275,10 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public void onEnable() {
+        this.protocolManager.addPacketListener(this.packetPlayOutUpdateTimeListener);
+
         systemClock = Clock.systemUTC();
         syncPaused = false;
-
-        // TODO: There should be a way to "fake" this setting for each connected player without actually changing the game rule
-        Bukkit.getWorlds().forEach(world -> world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false));
-        logger.warning("While this plugin is active the game rule doDaylightCycle will be set to false");
 
         var command = getCommand("timesync");
         command.setExecutor(this);
@@ -248,6 +290,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public void onDisable() {
+        this.protocolManager.removePacketListener(this.packetPlayOutUpdateTimeListener);
         stopTimeSynchronization();
         HandlerList.unregisterAll((Listener) this);
         saveConfiguration();
