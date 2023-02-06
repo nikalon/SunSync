@@ -48,7 +48,7 @@ class Configuration {
                 }
             }
         }
-        this.logger.info(String.format("Loaded %d regions from", totalParsedRegions));
+        this.logger.info(String.format("Loaded %d regions from regions.csv", totalParsedRegions));
 
         this.location = "auto";
         this.geographicCoordinates = parseLocationOption(this.location);
@@ -95,6 +95,8 @@ class Configuration {
         if (location.equals("auto")) {
             // Automatically detect geographic coordinates based on some heuristics
             var systemRegion = System.getProperty("user.country");
+            if (systemRegion == null) return GeographicCoordinate.defaultCoordinate();
+
             var defaultCoordinates = GeographicCoordinate.defaultCoordinate();
             return this.worldRegions.getOrDefault(systemRegion, defaultCoordinates);
         } else {
