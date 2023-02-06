@@ -57,7 +57,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private Configuration configuration;
     private Clock systemClock;
     private long currentMinecraftTime;
-    private boolean syncPaused;
+    private boolean paused;
 
     private BukkitTask task;
     private Logger logger;
@@ -73,34 +73,28 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private Hashtable<String, ParameterParser> commandParameters;
     private List<String> commandTabCompletion;
 
-    private void startTimeSynchronization() {
-        stopTimeSynchronization();
-        if (task != null) {
-            task.cancel();
-            task = null;
-        }
-        task = Bukkit.getScheduler().runTaskTimer(this, this, 0, configuration.getSynchronizationIntervalSeconds() * ONE_SECOND_IN_MINECRAFT_TICKS);
-        syncPaused = false;
-        debugLog("Started/Restarted time synchronization");
+    private void startTimeSynchronizationTask() {
+        // Starts the time synchronization task
+        stopTimeSynchronizationTask();
+        var intervalSecs = configuration.getSynchronizationIntervalSeconds();
+        this.task = Bukkit.getScheduler().runTaskTimer(this, this, 0, intervalSecs * ONE_SECOND_IN_MINECRAFT_TICKS);
+        debugLog("Started time synchronization task");
     }
 
-    private void stopTimeSynchronization() {
-        syncPaused = true;
-        debugLog("Time synchronization stopped");
-    }
-
-    private void synchronizeTimeNow() {
-        if (syncPaused) {
-            synchronizeTimeOnce();
-        } else {
-            startTimeSynchronization();
+    private void stopTimeSynchronizationTask() {
+        // Stops the time synchronization task
+        if (this.task != null) {
+            this.task.cancel();
+            this.task = null;
+            debugLog("Stopped time synchronization task");
         }
     }
 
-    private void synchronizeTimeOnce() {
+    private void synchronizeTime() {
         // Whenever the term "event" is used it means either the sunrise or sunset in the real world
 
-        if (! this.syncPaused) {
+        var needsToRecalculateEventsTimes = ! this.paused || this.lastUpdated == null;
+        if (needsToRecalculateEventsTimes) {
             LocalDateTime now = LocalDateTime.now(systemClock);
             debugLog(String.format("The time is %s (UTC)", now.toLocalTime()));
 
@@ -117,50 +111,47 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                     debugLog(String.format("Tomorrow's events -> rise at %s (UTC), set at %s (UTC)", tomorrowEvents.riseUTCTime, tomorrowEvents.setUTCTime));
                 }
             } catch (NeverRaisesException e) {
-                Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDNIGHT_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-                logger.warning(String.format("The Sun will not rise today. Setting game time to midnight (Minecraft time %d).", MINECRAFT_MIDNIGHT_TICKS));
-                debugLog(String.format("All worlds synchronized to Minecraft time %d", MINECRAFT_MIDNIGHT_TICKS));
-                return;
+                this.currentMinecraftTime = MINECRAFT_MIDNIGHT_TICKS;
+                logger.warning(String.format("The Sun will not rise today. Setting game time to midnight (Minecraft time %d).", this.currentMinecraftTime));
             } catch (NeverSetsException e) {
-                Bukkit.getWorlds().forEach((world) -> world.setTime(MINECRAFT_MIDDAY_TICKS)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
-                logger.warning(String.format("The Sun will not set today. Setting game time to midday (Minecraft time %d).", MINECRAFT_MIDDAY_TICKS));
-                debugLog(String.format("All worlds synchronized to Minecraft time %d", MINECRAFT_MIDDAY_TICKS));
-                return;
+                this.currentMinecraftTime = MINECRAFT_MIDDAY_TICKS;
+                logger.warning(String.format("The Sun will not set today. Setting game time to midday (Minecraft time %d).", this.currentMinecraftTime));
             }
 
-            // Error condition reached. The Sun will not rise or will not set today. Skipping time synchronization...
-            if (yesterdayEvents == null || todayEvents == null || tomorrowEvents == null) return;
-
-            // Figures out if it's daytime or nighttime right now
-            LocalDateTime last_event_time;
-            LocalDateTime next_event_time;
-            boolean is_daytime;
-            if (now.isBefore(todayEvents.riseUTCTime)) {
-                // Nighttime. Last event was yesterday's sunset. Next event is today's sunrise.
-                is_daytime = false;
-                last_event_time = yesterdayEvents.setUTCTime;
-                next_event_time = todayEvents.riseUTCTime;
-            } else if (now.isAfter(todayEvents.setUTCTime)) {
-                // Nighttime. Last event was today's sunset. Next event is tomorrow's sunrise.
-                is_daytime = false;
-                last_event_time = todayEvents.setUTCTime;
-                next_event_time = tomorrowEvents.riseUTCTime;
+            if (yesterdayEvents == null || todayEvents == null || tomorrowEvents == null) {
+                // Error condition reached. The Sun will not rise and/or set today.
             } else {
-                // Daytime. Last event was today's sunrise. Next event is today's sunset.
-                is_daytime = true;
-                last_event_time = todayEvents.riseUTCTime;
-                next_event_time = todayEvents.setUTCTime;
-            }
+                // Determine if it's daytime or nighttime
+                LocalDateTime last_event_time;
+                LocalDateTime next_event_time;
+                boolean is_daytime;
+                if (now.isBefore(todayEvents.riseUTCTime)) {
+                    // Nighttime. Last event was yesterday's sunset. Next event is today's sunrise.
+                    is_daytime = false;
+                    last_event_time = yesterdayEvents.setUTCTime;
+                    next_event_time = todayEvents.riseUTCTime;
+                } else if (now.isAfter(todayEvents.setUTCTime)) {
+                    // Nighttime. Last event was today's sunset. Next event is tomorrow's sunrise.
+                    is_daytime = false;
+                    last_event_time = todayEvents.setUTCTime;
+                    next_event_time = tomorrowEvents.riseUTCTime;
+                } else {
+                    // Daytime. Last event was today's sunrise. Next event is today's sunset.
+                    is_daytime = true;
+                    last_event_time = todayEvents.riseUTCTime;
+                    next_event_time = todayEvents.setUTCTime;
+                }
 
-            double event_interval_duration = Duration.between(last_event_time, next_event_time).getSeconds();
-            // Time elapsed since the last event
-            double delta_time = Duration.between(last_event_time, now).getSeconds();
+                double event_interval_duration = Duration.between(last_event_time, next_event_time).getSeconds();
+                // Time elapsed since the last event
+                double delta_time = Duration.between(last_event_time, now).getSeconds();
 
-            // Apply a linear interpolation between the last and next event times. Then, convert it into a Minecraft time.
-            if (is_daytime) {
-                this.currentMinecraftTime = (long) ((MINECRAFT_DAY_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNRISE_START_TICKS);
-            } else {
-                this.currentMinecraftTime = (long) ((MINECRAFT_NIGHT_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNSET_START_TICKS);
+                // Apply a linear interpolation between the last and next event times. Then, convert it into a Minecraft time.
+                if (is_daytime) {
+                    this.currentMinecraftTime = (long) ((MINECRAFT_DAY_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNRISE_START_TICKS);
+                } else {
+                    this.currentMinecraftTime = (long) ((MINECRAFT_NIGHT_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNSET_START_TICKS);
+                }
             }
         }
 
@@ -278,27 +269,28 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         this.protocolManager.addPacketListener(this.packetPlayOutUpdateTimeListener);
 
         systemClock = Clock.systemUTC();
-        syncPaused = false;
+        this.paused = false;
 
         var command = getCommand("timesync");
         command.setExecutor(this);
         command.setTabCompleter(this);
         getServer().getPluginManager().registerEvents(this, this);
 
-        startTimeSynchronization();
+        startTimeSynchronizationTask();
     }
 
     @Override
     public void onDisable() {
         this.protocolManager.removePacketListener(this.packetPlayOutUpdateTimeListener);
-        stopTimeSynchronization();
+        stopTimeSynchronizationTask();
         HandlerList.unregisterAll((Listener) this);
         saveConfiguration();
     }
 
     @Override
     public void run() {
-        synchronizeTimeOnce();
+        // Task timer callback
+        synchronizeTime();
     }
 
     @Override
@@ -339,7 +331,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 yesterdayEvents = null;
                 tomorrowEvents = null;
 
-                synchronizeTimeNow();
+                synchronizeTime();
                 sender.sendMessage(String.format("Location set to %s", configuration.getGeographicCoordinates()));
             } else {
                 sender.sendMessage("Invalid coordinates. Please, set a valid geographic coordinate or \"auto\"");
@@ -358,9 +350,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             try {
                 syncIntervalSec = Long.parseLong(value);
                 if (configuration.setSynchronizationIntervalSeconds(syncIntervalSec)) {
-                    if (! syncPaused) {
-                        startTimeSynchronization();
-                    }
+                    startTimeSynchronizationTask(); // Restart time synchronization task
                     sender.sendMessage(String.format("Synchronization interval set to %d seconds", syncIntervalSec));
                 } else {
                     sender.sendMessage(String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
@@ -462,13 +452,13 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 }
             }
 
-            synchronizeTimeNow();
+            synchronizeTime();
         }
     }
 
     private void parseContinueCommand(CommandSender sender) {
-        if (syncPaused) {
-            startTimeSynchronization();
+        if (this.paused) {
+            this.paused = false;
             sender.sendMessage("Time synchronization restarted");
         } else {
             sender.sendMessage("Time synchronization is already running!");
@@ -476,10 +466,10 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     }
 
     private void parsePauseCommand(CommandSender sender) {
-        if (syncPaused) {
+        if (this.paused) {
             sender.sendMessage("Time synchronization is already paused!");
         } else {
-            stopTimeSynchronization();
+            this.paused = true;
             sender.sendMessage("Time synchronization paused");
         }
     }
