@@ -44,6 +44,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private static final long ONE_SECOND_IN_MINECRAFT_TICKS = 20L;
     private static final long MINECRAFT_DAY_LENGTH_TICKS    = 14000;
     private static final long MINECRAFT_NIGHT_LENGTH_TICKS  = 10000;
+    private static final long MINECRAFT_DAY_IN_TICKS        = 24000;
 
     // Sunrise time start as seen from the game. We cannot start from day -1000, so we use the next valid sunrise time.
     private static final long MINECRAFT_SUNRISE_START_TICKS = 23000;
@@ -112,9 +113,11 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 }
             } catch (NeverRaisesException e) {
                 this.currentMinecraftTime = MINECRAFT_MIDNIGHT_TICKS;
+                this.currentMinecraftTime = this.currentMinecraftTime % MINECRAFT_DAY_IN_TICKS;
                 logger.warning(String.format("The Sun will not rise today. Setting game time to midnight (Minecraft time %d).", this.currentMinecraftTime));
             } catch (NeverSetsException e) {
                 this.currentMinecraftTime = MINECRAFT_MIDDAY_TICKS;
+                this.currentMinecraftTime = this.currentMinecraftTime % MINECRAFT_DAY_IN_TICKS;
                 logger.warning(String.format("The Sun will not set today. Setting game time to midday (Minecraft time %d).", this.currentMinecraftTime));
             }
 
@@ -149,13 +152,15 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 // Apply a linear interpolation between the last and next event times. Then, convert it into a Minecraft time.
                 if (is_daytime) {
                     this.currentMinecraftTime = (long) ((MINECRAFT_DAY_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNRISE_START_TICKS);
+                    this.currentMinecraftTime = this.currentMinecraftTime % MINECRAFT_DAY_IN_TICKS;
                 } else {
                     this.currentMinecraftTime = (long) ((MINECRAFT_NIGHT_LENGTH_TICKS / event_interval_duration) * delta_time + MINECRAFT_SUNSET_START_TICKS);
+                    this.currentMinecraftTime = this.currentMinecraftTime % MINECRAFT_DAY_IN_TICKS;
                 }
             }
         }
 
-        Bukkit.getWorlds().forEach((world) -> world.setTime(this.currentMinecraftTime)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
+        Bukkit.getWorlds().forEach((world) -> world.setFullTime(this.currentMinecraftTime)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
         debugLog(String.format("All worlds synchronized to Minecraft time %d", this.currentMinecraftTime));
     }
 
