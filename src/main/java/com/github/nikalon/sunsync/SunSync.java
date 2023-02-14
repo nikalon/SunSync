@@ -58,6 +58,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private Configuration configuration;
     private Clock systemClock;
     private long currentMinecraftTime;
+    private long currentMinecraftDay;
     private boolean paused;
 
     private BukkitTask task;
@@ -160,7 +161,17 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             }
         }
 
-        Bukkit.getWorlds().forEach((world) -> world.setFullTime(this.currentMinecraftTime)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
+        // Set Moon phase
+        // TODO: Only set it once a day
+        LocalDateTime now = LocalDateTime.now(systemClock);
+        var moonPhase = Moon.phase(now);
+        debugLog(String.format("Current Moon phase: " + moonPhase));
+        this.currentMinecraftDay = Math.round( Helper.modulo(4.0 - (moonPhase * 8.0), 8.0));
+        debugLog(String.format("Current Minecraft day (for moon phase): " + this.currentMinecraftDay));
+
+        // And finally do the time synchronization
+        long fullMinecraftTime = this.currentMinecraftTime + (this.currentMinecraftDay * MINECRAFT_DAY_IN_TICKS);
+        Bukkit.getWorlds().forEach((world) -> world.setFullTime(fullMinecraftTime)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
         debugLog(String.format("All worlds synchronized to Minecraft time %d", this.currentMinecraftTime));
     }
 

@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class SunTest {
     @Test
     void convertGreenwichToJulianDateTest() {
-        assertEquals(2455002.25, Sun.GreenwichToJulianDate(19.75, 6, 2009));
-        assertEquals(2458849.5, Sun.GreenwichToJulianDate(1, 1, 2020));
+        assertEquals(2455002.25, Helper.GreenwichToJulianDate(19.75, 6, 2009));
+        assertEquals(2458849.5, Helper.GreenwichToJulianDate(1, 1, 2020));
     }
 
     @Test
