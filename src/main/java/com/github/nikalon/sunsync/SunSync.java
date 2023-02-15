@@ -276,7 +276,9 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
         // Debug mode
         Object debugVal = configFile.get("debug_mode");
-        if (debugVal != null && debugVal instanceof Boolean) {
+        if (debugVal == null) {
+            // Set debug mode to default value. No action is required.
+        } else if (debugVal instanceof Boolean) {
             configuration.setDebugMode((Boolean) debugVal);
         } else {
             logger.severe("\"debug_mode\" value in config.yml is invalid, using default value. Please, use a boolean value (true or false).");
