@@ -102,7 +102,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
             try {
                 if (lastUpdated == null || now.toLocalDate().isAfter(lastUpdated)) {
-                    // Cache calculations until 23:59:59 (UTC)
+                    // Calculate sunrise and sunset times and cache it until 23:59:59 (UTC)
                     lastUpdated = now.toLocalDate();
                     todayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.toLocalDate());
                     yesterdayEvents = Sun.sunriseAndSunsetTimes(configuration.getGeographicCoordinates(), now.minusDays(1).toLocalDate());
@@ -111,6 +111,34 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                     debugLog(String.format("Yesterday the Sun rose at %s (UTC), set at %s (UTC)", yesterdayEvents.riseUTCTime, yesterdayEvents.setUTCTime));
                     debugLog(String.format("Today's events -> rise at %s (UTC), set at %s (UTC)", todayEvents.riseUTCTime, todayEvents.setUTCTime));
                     debugLog(String.format("Tomorrow's events -> rise at %s (UTC), set at %s (UTC)", tomorrowEvents.riseUTCTime, tomorrowEvents.setUTCTime));
+
+                    // Calculate today's Moon phase and cache it until 23:59:59 (UTC)
+                    var moonPhase = Moon.phase(now);
+                    debugLog(String.format("Current Moon phase: " + moonPhase));
+
+                    /*
+                    Minecraft has 8 Moon phases according to the wiki (https://minecraft.fandom.com/wiki/Moon#Phases)
+                    Starting from day 0 it goes through the phases as this:
+                    Day 0: Full Moon
+                    Day 1: Waning gibbous
+                    Day 2: Last Quarter
+                    Day 3: Waning Crescent
+                    Day 4: New Moon
+                    Day 5: Waxing crescent
+                    Day 6: First quarter
+                    Day 7: Waxing gibbous
+
+                    What we're doing here is calculate the current real world Moon phase and convert it to the corresponding
+                    Minecraft day defined above. This plugin will always stay in the range of days 0-7 at all times. This
+                    means that as the days go by the Minecraft server will go back and forth in time. That's expected
+                    behaviour for now, because as of Minecraft 1.18-1.19 we have no way to modify the orbit, moonrise
+                    time, moonset time, phase, etc of the Moon directly in the server side.
+                    */
+
+                    // TODO: Match visual appearance of the the Moon. Maybe add a setting for this?
+                    this.currentMinecraftDay = Math.round(Helper.modulo(4.0 + (moonPhase * 8.0), 8.0));
+                    debugLog(String.format("Current Minecraft day (for moon phase): " + this.currentMinecraftDay));
+
                 }
             } catch (NeverRaisesException e) {
                 this.currentMinecraftTime = MINECRAFT_MIDNIGHT_TICKS;
@@ -161,15 +189,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             }
         }
 
-        // Set Moon phase
-        // TODO: Only set it once a day
-        LocalDateTime now = LocalDateTime.now(systemClock);
-        var moonPhase = Moon.phase(now);
-        debugLog(String.format("Current Moon phase: " + moonPhase));
-        this.currentMinecraftDay = Math.round( Helper.modulo(4.0 - (moonPhase * 8.0), 8.0));
-        debugLog(String.format("Current Minecraft day (for moon phase): " + this.currentMinecraftDay));
-
-        // And finally do the time synchronization
+        // Synchronize Minecraft time
         long fullMinecraftTime = this.currentMinecraftTime + (this.currentMinecraftDay * MINECRAFT_DAY_IN_TICKS);
         Bukkit.getWorlds().forEach((world) -> world.setFullTime(fullMinecraftTime)); // TODO: Select desired worlds in config. Synchronizing all worlds for now...
         debugLog(String.format("All worlds synchronized to Minecraft time %d", this.currentMinecraftTime));
