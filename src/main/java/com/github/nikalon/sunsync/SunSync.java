@@ -236,6 +236,8 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 based on the sign of the time received. If a negative time is received, the client considers doDaylightCycle
                 to be false, while a positive time indicates that doDaylightCycle is true. Here we ensure that all
                 packets are always negative signed.
+
+                Source: https://wiki.vg/Protocol#Update_Time
             */
             @Override
             public void onPacketSending(PacketEvent event) {
