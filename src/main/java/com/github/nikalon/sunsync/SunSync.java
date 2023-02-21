@@ -46,6 +46,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private static final long MINECRAFT_DAY_LENGTH_TICKS    = 14000;
     private static final long MINECRAFT_NIGHT_LENGTH_TICKS  = 10000;
     private static final long MINECRAFT_DAY_IN_TICKS        = 24000;
+    private static final int  MINECRAFT_TOTAL_MOON_PHASES   = 8;
 
     // Sunrise time start as seen from the game. We cannot start from day -1000, so we use the next valid sunrise time.
     private static final long MINECRAFT_SUNRISE_START_TICKS = 23000;
@@ -55,6 +56,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     private static final long MINECRAFT_MIDDAY_TICKS        = 30000;
     private static final long MINECRAFT_MIDNIGHT_TICKS      = 42000;
+    private static final int  MINECRAFT_NEW_MOON_DAY_START  = 4;
 
     private Configuration configuration;
     private Clock systemClock;
@@ -115,7 +117,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
                     // Calculate today's Moon phase and cache it until 23:59:59 (UTC)
                     var moonPhase = Moon.phase(now);
-                    debugLog(String.format("Current Moon phase: " + moonPhase));
+                    debugLog(String.format("Today's Moon phase: " + moonPhase));
 
                     /*
                     Minecraft has 8 Moon phases according to the wiki (https://minecraft.fandom.com/wiki/Moon#Phases)
@@ -137,7 +139,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                     */
 
                     // TODO: Match visual appearance of the the Moon. Maybe add a setting for this?
-                    this.currentMinecraftDay = Math.round(Helper.modulo(4.0 + (moonPhase * 8.0), 8.0));
+                    this.currentMinecraftDay = Math.round(Helper.modulo(MINECRAFT_NEW_MOON_DAY_START + (moonPhase * MINECRAFT_TOTAL_MOON_PHASES), 8.0));
                     debugLog(String.format("Current Minecraft day (for moon phase): " + this.currentMinecraftDay));
 
                 }
