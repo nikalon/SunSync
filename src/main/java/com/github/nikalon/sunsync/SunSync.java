@@ -15,6 +15,7 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -335,14 +336,13 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        // TODO: Use colors!
         // Command /timesync
         if (args.length == 0) return false; // Show usage (set in plugin.yml)
 
         var parameter = args[0];
         var parser = commandParameters.get(parameter);
         if (parser == null) {
-            sender.sendMessage(String.format("Unknown parameter \"%s\"", parameter));
+            sender.sendMessage(ChatColor.RED + String.format("Unknown parameter \"%s\"", parameter));
         } else {
             parser.parse(sender, Arrays.asList(args).subList(1, args.length));
         }
@@ -526,15 +526,13 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     @EventHandler(ignoreCancelled = true)
     public void onPlayerIssuedTimeSetCommandEvent(PlayerCommandPreprocessEvent event) {
         if (SunSync.commandChangesGameTime(event.getMessage())) {
-            // TODO: Use colors!
-            event.getPlayer().sendRawMessage(String.format("This command will have no effect while the plugin %s is enabled.", getName()));
+            event.getPlayer().sendMessage(ChatColor.YELLOW + String.format("This command will have no effect while the plugin %s is enabled.", getName()));
         }
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onServerIssuedTimeSetCommandEvent(ServerCommandEvent event) {
         if (commandChangesGameTime(event.getCommand())) {
-            // TODO: Use colors!
             logger.warning(String.format("This command will have no effect while the plugin %s is enabled.", getName()));
         }
     }
@@ -552,8 +550,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerBedEnterEvent(PlayerBedEnterEvent event) {
-        // TODO: Use colors! Maybe use a toast message instead?
-        event.getPlayer().sendRawMessage(String.format("Beds will not skip the night while the plugin %s is enabled.", getName()));
+        event.getPlayer().sendMessage(ChatColor.YELLOW + String.format("Beds will not skip the night while the plugin %s is enabled.", getName()));
     }
 
     private void debugLog(String message) {
