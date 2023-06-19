@@ -18,8 +18,8 @@ Additionally, if you open the debug screen (F3) and check the in-game Minecraft 
 To install this plugin follow these steps:
 
 1. Make sure your server is running Spigot version `1.18` or higher.
-2. Download the latest version of `ProtocolLib` from the Spigot website and install it in your server's plugins folder. **It is a required dependency.**
-3. Download the latest version of SunSync from the releases page on GitHub.
+2. Download the latest version of [ProtocolLib](https://www.spigotmc.org/resources/protocollib.1997/) from the Spigot website and install it in your server's plugins folder. **It is a required dependency.**
+3. Download the latest version of SunSync from the [releases page on GitHub](https://github.com/nikalon/SunSync/releases).
 4. Copy the downloaded JAR file to your server's plugins folder.
 5. Start the server
 
@@ -49,7 +49,7 @@ The following commands can only be used when debug mode is enabled. These are on
 ## Configuration
 SunSync comes with a default configuration file called config.yml, which is located in the plugins/SunSync folder. You can customize the plugin's behavior by editing this file. Here are some of the options you can set:
 
-* `location = [geographic location]`: The location that the plugin uses to determine the real-world time. By default, the plugin uses the server's location, but you can set it to a specific location using a decimal coordinate, a sexagesimal coordinate, or "auto". If you set it to "auto", the plugin will try to automatically determine your location based on your server's IP address.
+* `location = [geographic location]`: The location that the plugin uses to determine the real-world time. By default, the plugin uses the server's location, but you can set it to a specific location using a decimal coordinate, a sexagesimal coordinate, or "auto". If you set it to "auto", the plugin will try to automatically determine your location based on some heuristics.
 
 * `synchronization_interval_seconds = [number]`: The interval (in seconds) at which the plugin updates the Minecraft world's time. The default is 5 seconds.
 
