@@ -75,8 +75,32 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private RiseAndSet tomorrowEvents;
 
     // Parameters used in /timesync command
-    private Hashtable<String, ParameterParser> commandParameters;
-    private List<String> commandTabCompletion;
+    private final Hashtable<String, ParameterParser> commandParameters = new Hashtable<String, ParameterParser>(){{
+        put("location", (sender, args) -> parseLocationCommand(sender, args));
+        put("syncIntervalSec", (sender, args) -> parseSyncIntervalSecCommand(sender, args));
+        put("clock", (sender, args) -> parseClockCommand(sender, args));
+        put("debugMode", (sender, args) -> parseDebugModeCommand(sender, args));
+        put("continue", (sender, args) -> parseContinueCommand(sender));
+        put("pause", (sender, args) -> parsePauseCommand(sender));
+    }};
+    private List<String> tempParameterSuggestion = new ArrayList<String>(50); // Used as return value for parameter suggestions
+    private final List<String> parameterList = List.of(
+        "location",
+        "syncIntervalSec",
+        "clock",
+        "debugMode"
+    );
+    private final List<String> parameterListDebugMode = List.of(
+        "location",
+        "syncIntervalSec",
+        "clock",
+        "debugMode",
+        "continue",
+        "pause"
+    );
+    private final List <String> locationParameters = List.of("auto");
+    private final List<String> clockParameters = List.of("default");
+    private final List<String> debugModeParameters = List.of("true", "false");
 
     private void startTimeSynchronizationTask() {
         // Starts the time synchronization task
@@ -200,6 +224,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public void onLoad() {
+        this.logger = getLogger();
         this.protocolManager = ProtocolLibrary.getProtocolManager();
         this.packetPlayOutUpdateTimeListener = new PacketAdapter(
             this,
@@ -238,22 +263,6 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 }
             }
         };
-
-        // Setup /timesync command
-        commandParameters = new Hashtable<>();
-        commandParameters.put("location", (sender, args) -> parseLocationCommand(sender, args));
-        commandParameters.put("syncIntervalSec", (sender, args) -> parseSyncIntervalSecCommand(sender, args));
-        commandParameters.put("clock", (sender, args) -> parseClockCommand(sender, args));
-        commandParameters.put("debugMode", (sender, args) -> parseDebugModeCommand(sender, args));
-        commandParameters.put("continue", (sender, args) -> parseContinueCommand(sender));
-        commandParameters.put("pause", (sender, args) -> parsePauseCommand(sender));
-
-        commandTabCompletion = new ArrayList<String>();
-        for (String key : commandParameters.keySet()) {
-            commandTabCompletion.add(key);
-        }
-
-        this.logger = getLogger();
 
         // Load configuration
         saveDefaultConfig();
@@ -336,9 +345,47 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        // TODO: Incomplete. Add suggestions for each argument
-        if (args.length == 1)   return commandTabCompletion;
-        else                    return null;
+        // Ok, this code is fragile. If I add more parameters and I forget to update
+        // this method no suggestions will we shown. But I don't have 200 commands
+        // yet. A more complex solution is not needed for now.
+        if (args.length == 0) {
+            // Don't show any suggestions
+            return null;
+        }
+
+        var searchPattern = "";
+        this.tempParameterSuggestion.clear();
+        if (args.length >= 1) {
+            if (args.length == 1) {
+                searchPattern = args[0];
+                if (this.configuration.getDebugMode()) {
+                    this.tempParameterSuggestion.addAll(this.parameterListDebugMode);
+                } else {
+                    this.tempParameterSuggestion.addAll(this.parameterList);
+                }
+            } else if (args.length == 2 && args[0].equals("location")) {
+                searchPattern = args[1];
+                this.tempParameterSuggestion.addAll(this.locationParameters);
+            } else if (args.length == 2 && args[0].equals("clock")) {
+                searchPattern = args[1];
+                this.tempParameterSuggestion.addAll(this.clockParameters);
+            } else if (args.length == 2 && args[0].equals("debugMode")) {
+                searchPattern = args[1];
+                this.tempParameterSuggestion.addAll(this.debugModeParameters);
+            }
+        }
+
+        // Filter suggestions in the case that the user has already typed any characters
+        if (! searchPattern.isEmpty()) {
+            for (int i = this.tempParameterSuggestion.size() - 1; i >= 0; i--) {
+                var suggestion = this.tempParameterSuggestion.get(i);
+                if (! suggestion.startsWith(searchPattern)) {
+                    this.tempParameterSuggestion.remove(i);
+                }
+            }
+        }
+
+        return this.tempParameterSuggestion;
     }
 
     private void parseLocationCommand(CommandSender sender, List<String> args) {
