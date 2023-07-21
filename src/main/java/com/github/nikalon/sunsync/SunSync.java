@@ -198,22 +198,6 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         debugLog(String.format("All worlds synchronized to Minecraft time %d", this.currentMinecraftTime));
     }
 
-    private void saveConfiguration() {
-        var conFile = getConfig();
-
-        // Debug mode
-        conFile.set("debug_mode", configuration.getDebugMode());
-
-        // Location
-        conFile.set("location", configuration.getLocation());
-
-        // Synchronization interval
-        conFile.set("synchronization_interval_seconds", configuration.getSynchronizationIntervalSeconds());
-
-        saveConfig(); // Save to config.yml
-        debugLog("Configuration saved to config.yml");
-    }
-
     @Override
     public void onLoad() {
         this.protocolManager = ProtocolLibrary.getProtocolManager();
@@ -326,7 +310,6 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         this.protocolManager.removePacketListener(this.packetPlayOutUpdateTimeListener);
         stopTimeSynchronizationTask();
         HandlerList.unregisterAll((Listener) this);
-        saveConfiguration();
     }
 
     @Override

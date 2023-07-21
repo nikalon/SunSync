@@ -40,7 +40,7 @@ SunSync comes with several commands that you can use to customize the plugin's b
 * `/timesync debugMode`: Tells if debug mode is enabled or not.
 * `/timesync debugMode <bool>`: Enable or disable debug mode. You can set a boolean value (true or false). The default value is false.
 
-The following commands can only be used when debug mode is enabled. These are only intended for debugging purposes and any changes applied with these commands will not be saved, so don't rely on them. When debug mode is enabled it will generate A LOT of debug info in your server console.
+The following commands can only be used when debug mode is enabled. These are only intended for debugging purposes. When debug mode is enabled it will generate A LOT of debug info in your server console.
 * `/timesync pause`: Pauses the time synchronization without stopping it completely.
 * `/timesync continue`: Resumes the time synchronization if it was paused.
 * `/timesync clock`: Displays the current real-world time and the Minecraft time.
