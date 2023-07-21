@@ -274,8 +274,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         // Load configuration
         saveDefaultConfig();
         FileConfiguration configFile = getConfig();
-        var regionsFile = getResource("regions.csv");
-        this.configuration = new Configuration(this.logger, regionsFile);
+        this.configuration = new Configuration(this.logger);
 
         // Debug mode
         Object debugVal = configFile.get("debug_mode");

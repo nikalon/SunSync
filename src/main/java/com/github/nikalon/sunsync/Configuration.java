@@ -1,8 +1,5 @@
 package com.github.nikalon.sunsync;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Hashtable;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
@@ -16,53 +13,16 @@ class Configuration {
     private static final Pattern REGEX_DECIMAL_DEGREES = Pattern.compile("(?<latitude>-?\\d+(?:\\.\\d+)?),?\\s+(?<longitude>-?\\d+(?:\\.\\d+)?)");
     private static final Pattern REGEX_SEXAGESIMAL_DEGREES = Pattern.compile("(?<LatDeg>\\d+)°(?: *(?<LatArcMin>\\d+)')?(?: *(?<LatArcSec>\\d+(?:\\.\\d+)?)\")? *(?<LatDirection>[NS]),?\\s+(?<LonDeg>\\d+)°(?: *(?<LonArcMin>\\d+)')?(?: *(?<LonArcSec>\\d+(?:\\.\\d+)?)\")? *(?<LonDirection>[EW])");
 
-    private Logger logger;
     private String location;
     private long syncIntervalSeconds;
     private boolean debugMode;
     private GeographicCoordinate geographicCoordinates;
-    private Hashtable<String, GeographicCoordinate> worldRegions;
 
-   Configuration(Logger logger, InputStream regionsFileStream) {
-        this.logger = logger;
-        this.worldRegions = new Hashtable<>();
-
-        // Parse regions file
-        var pattern = Pattern.compile("(?<region>\\w+),Point\\((?<longitude>-?\\d+(?:\\.\\d+)?) (?<latitude>-?\\d+(?:\\.\\d+)?)\\)");
-        var regionsFile = readEntireFile(regionsFileStream);
-        var lines = regionsFile.split("\n");
-        var totalParsedRegions = 0;
-        for (String line : lines) {
-            var matcher = pattern.matcher(line);
-            if (matcher.find()) {
-                String region = matcher.group("region");
-                try {
-                    double latitude = Double.parseDouble(matcher.group("latitude"));
-                    double longitude = Double.parseDouble(matcher.group("longitude"));
-                    GeographicCoordinate coordinates = GeographicCoordinate.fromDecimalDegrees(latitude, longitude);
-
-                    this.worldRegions.put(region, coordinates);
-                    totalParsedRegions += 1;
-                } catch (NumberFormatException ignored) {
-                    this.logger.warning(String .format("Parse error when processing geographic coordinates for \"%s\" region ", region));
-                }
-            }
-        }
-        this.logger.info(String.format("Loaded %d regions from regions.csv", totalParsedRegions));
-
+   Configuration(Logger logger) {
         this.location = "auto";
         this.geographicCoordinates = parseLocationOption(this.location);
         this.syncIntervalSeconds = SYNCHRONIZATION_INTERVAL_SECONDS_DEFAULT;
         this.debugMode = DEBUG_MODE_DEFAULT;
-    }
-
-    private String readEntireFile(InputStream fileInputStream) {
-        try {
-            var data = fileInputStream.readAllBytes();
-            return new String(data);
-        } catch (IOException e) {
-            return "";
-        }
     }
 
     static long getSyncIntervalLowestValidValue() {
@@ -98,7 +58,7 @@ class Configuration {
             if (systemRegion == null) return GeographicCoordinate.defaultCoordinate();
 
             var defaultCoordinates = GeographicCoordinate.defaultCoordinate();
-            return this.worldRegions.getOrDefault(systemRegion, defaultCoordinates);
+            return Regions.REGIONS.getOrDefault(systemRegion, defaultCoordinates);
         } else {
             // Try parse as decimal degrees
             var decimalMatcher = REGEX_DECIMAL_DEGREES.matcher(location);

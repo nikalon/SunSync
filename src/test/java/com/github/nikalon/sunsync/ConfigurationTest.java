@@ -3,7 +3,6 @@ package com.github.nikalon.sunsync;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.InputStream;
 import java.util.logging.Logger;
 
 import org.junit.jupiter.api.Test;
@@ -11,7 +10,7 @@ import org.junit.jupiter.api.Test;
 public class ConfigurationTest {
     @Test
     public void shouldValidateCorrectDecimalCoordinatesTest() {
-        var conf = new Configuration(Logger.getLogger("testLogger"), InputStream.nullInputStream());
+        var conf = new Configuration(Logger.getLogger("testLogger"));
 
         // I don't know how to handle this case correctly with regular expressions, so it's not handled for now...
         // assertTrue(conf.setLocation("50,50")); 
@@ -25,7 +24,7 @@ public class ConfigurationTest {
 
     @Test
     public void shouldNotValidateIncorrectDecimalCoordinatesTest() {
-        var conf = new Configuration(Logger.getLogger("testLogger"), InputStream.nullInputStream());
+        var conf = new Configuration(Logger.getLogger("testLogger"));
         assertFalse(conf.setLocation("91,0"));
         assertFalse(conf.setLocation("91, 0"));
         assertFalse(conf.setLocation("91 0"));
