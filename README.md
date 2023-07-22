@@ -62,3 +62,4 @@ If you encounter a bug or have a feature request, please open an issue on GitHub
 To develop this plugin, the following sources served as a reference:
 
 - Practical Astronomy with your Calculator or Spreadsheet, 4th Edition.
+- Some parts of the source code uses data from Wikidata.
