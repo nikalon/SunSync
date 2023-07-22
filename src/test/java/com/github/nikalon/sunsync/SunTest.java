@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import com.github.nikalon.sunsync.Sun.GeographicCoordinate;
 import com.github.nikalon.sunsync.Sun.NeverRaisesException;
 import com.github.nikalon.sunsync.Sun.NeverSetsException;
+import com.github.nikalon.sunsync.Sun.RiseAndSet;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -28,9 +29,9 @@ public class SunTest {
     @Test
     void invalidValueForSecondOfMinuteRegressionTest() throws NeverRaisesException, NeverSetsException {
         // Test rounding error for seconds. This test should not throw any exceptions.
-        var coordinates = GeographicCoordinate.fromDecimalDegrees(8.0, 1.0);
-        var date = LocalDate.of(2023, 1, 29);
-        var riseAndSet = Sun.sunriseAndSunsetTimes(coordinates, date);
+        GeographicCoordinate coordinates = GeographicCoordinate.fromDecimalDegrees(8.0, 1.0);
+        LocalDate date = LocalDate.of(2023, 1, 29);
+        RiseAndSet riseAndSet = Sun.sunriseAndSunsetTimes(coordinates, date);
         assertNotNull(riseAndSet);
     }
 }

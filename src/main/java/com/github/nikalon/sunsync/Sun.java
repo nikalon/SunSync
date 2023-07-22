@@ -143,7 +143,7 @@ class Sun {
         }
 
         public String toString() {
-            var fmt = new DecimalFormat("0.0#####", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+            DecimalFormat fmt = new DecimalFormat("0.0#####", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
             return String.format(Locale.ENGLISH, "%s, %s", fmt.format(latitude), fmt.format(longitude));
         }
     }

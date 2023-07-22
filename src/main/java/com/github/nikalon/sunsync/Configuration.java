@@ -1,6 +1,7 @@
 package com.github.nikalon.sunsync;
 
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.nikalon.sunsync.Sun.GeographicCoordinate;
@@ -54,14 +55,14 @@ class Configuration {
     private GeographicCoordinate parseLocationOption(String location) {
         if (location.equals("auto")) {
             // Automatically detect geographic coordinates based on some heuristics
-            var systemRegion = System.getProperty("user.country");
+            String systemRegion = System.getProperty("user.country");
             if (systemRegion == null) return GeographicCoordinate.defaultCoordinate();
 
-            var defaultCoordinates = GeographicCoordinate.defaultCoordinate();
+            GeographicCoordinate defaultCoordinates = GeographicCoordinate.defaultCoordinate();
             return Regions.REGIONS.getOrDefault(systemRegion, defaultCoordinates);
         } else {
             // Try parse as decimal degrees
-            var decimalMatcher = REGEX_DECIMAL_DEGREES.matcher(location);
+            Matcher decimalMatcher = REGEX_DECIMAL_DEGREES.matcher(location);
             if (decimalMatcher.matches()) {
                 try {
                     double latitude = Double.parseDouble(decimalMatcher.group("latitude"));
@@ -73,7 +74,7 @@ class Configuration {
             }
 
             // Try parse as sexagesimal degrees
-            var sexagesimalMatcher = REGEX_SEXAGESIMAL_DEGREES.matcher(location);
+            Matcher sexagesimalMatcher = REGEX_SEXAGESIMAL_DEGREES.matcher(location);
             if (sexagesimalMatcher.matches()) {
                 try {
                     // Latitude
@@ -137,7 +138,7 @@ class Configuration {
         if (location.equals("auto")) {
             return true;
         } else {
-            var coordinates = parseLocationOption(location);
+            GeographicCoordinate coordinates = parseLocationOption(location);
             if (coordinates == null) {
                 return false;
             }

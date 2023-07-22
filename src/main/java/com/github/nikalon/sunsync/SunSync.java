@@ -18,6 +18,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -37,6 +38,7 @@ import com.comphenix.protocol.ProtocolManager;
 import com.comphenix.protocol.events.ListenerPriority;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.reflect.StructureModifier;
 import com.github.nikalon.sunsync.Sun.NeverRaisesException;
 import com.github.nikalon.sunsync.Sun.NeverSetsException;
 import com.github.nikalon.sunsync.Sun.RiseAndSet;
@@ -84,13 +86,13 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         put("pause", (sender, args) -> parsePauseCommand(sender));
     }};
     private List<String> tempParameterSuggestion = new ArrayList<String>(50); // Used as return value for parameter suggestions
-    private final List<String> parameterList = List.of(
+    private final List<String> parameterList = Arrays.asList(
         "location",
         "syncIntervalSec",
         "clock",
         "debugMode"
     );
-    private final List<String> parameterListDebugMode = List.of(
+    private final List<String> parameterListDebugMode = Arrays.asList(
         "location",
         "syncIntervalSec",
         "clock",
@@ -98,14 +100,14 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         "continue",
         "pause"
     );
-    private final List <String> locationParameters = List.of("auto");
-    private final List<String> clockParameters = List.of("default");
-    private final List<String> debugModeParameters = List.of("true", "false");
+    private final List <String> locationParameters = Arrays.asList("auto");
+    private final List<String> clockParameters = Arrays.asList("default");
+    private final List<String> debugModeParameters = Arrays.asList("true", "false");
 
     private void startTimeSynchronizationTask() {
         // Starts the time synchronization task
         stopTimeSynchronizationTask();
-        var intervalSecs = configuration.getSynchronizationIntervalSeconds();
+        long intervalSecs = configuration.getSynchronizationIntervalSeconds();
         this.task = Bukkit.getScheduler().runTaskTimer(this, this, 0, intervalSecs * ONE_SECOND_IN_MINECRAFT_TICKS);
         debugLog("Started time synchronization task");
     }
@@ -122,7 +124,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     private void synchronizeTime() {
         // Whenever the term "event" is used it means either the sunrise or sunset in the real world
 
-        var needsToRecalculateEventsTimes = ! this.paused || this.lastUpdated == null;
+        boolean needsToRecalculateEventsTimes = ! this.paused || this.lastUpdated == null;
         if (needsToRecalculateEventsTimes) {
             LocalDateTime now = LocalDateTime.now(systemClock);
             debugLog(String.format("The time is %s (UTC)", now.toLocalTime()));
@@ -140,7 +142,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                     debugLog(String.format("Tomorrow's events -> rise at %s (UTC), set at %s (UTC)", tomorrowEvents.riseUTCTime, tomorrowEvents.setUTCTime));
 
                     // Calculate today's Moon phase and cache it until 23:59:59 (UTC)
-                    var moonPhase = Moon.phase(now);
+                    double moonPhase = Moon.phase(now);
                     debugLog(String.format("Today's Moon phase: " + moonPhase));
 
                     /*
@@ -254,8 +256,8 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             @Override
             public void onPacketSending(PacketEvent event) {
                 final int TIME_OF_DAY_FIELD = 1;
-                var fields = event.getPacket().getLongs();
-                var timeOfDay = fields.read(TIME_OF_DAY_FIELD);
+                StructureModifier<Long> fields = event.getPacket().getLongs();
+                Long timeOfDay = fields.read(TIME_OF_DAY_FIELD);
                 if (timeOfDay >= 0) {
                     // The gamerule doDaylightCycle is set to true. Change the sign of the time to make the client
                     // believe that the gamerule is set to false
@@ -306,7 +308,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         systemClock = Clock.systemUTC();
         this.paused = false;
 
-        var command = getCommand("timesync");
+        PluginCommand command = getCommand("timesync");
         command.setExecutor(this);
         command.setTabCompleter(this);
         getServer().getPluginManager().registerEvents(this, this);
@@ -332,8 +334,8 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         // Command /timesync
         if (args.length == 0) return false; // Show usage (set in plugin.yml)
 
-        var parameter = args[0];
-        var parser = commandParameters.get(parameter);
+        String parameter = args[0];
+        ParameterParser parser = commandParameters.get(parameter);
         if (parser == null) {
             sender.sendMessage(ChatColor.RED + String.format("Unknown parameter \"%s\"", parameter));
         } else {
@@ -353,7 +355,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             return null;
         }
 
-        var searchPattern = "";
+        String searchPattern = "";
         this.tempParameterSuggestion.clear();
         if (args.length >= 1) {
             if (args.length == 1) {
@@ -378,7 +380,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         // Filter suggestions in the case that the user has already typed any characters
         if (! searchPattern.isEmpty()) {
             for (int i = this.tempParameterSuggestion.size() - 1; i >= 0; i--) {
-                var suggestion = this.tempParameterSuggestion.get(i);
+                String suggestion = this.tempParameterSuggestion.get(i);
                 if (! suggestion.startsWith(searchPattern)) {
                     this.tempParameterSuggestion.remove(i);
                 }
@@ -440,7 +442,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             if (configuration.getDebugMode())   sender.sendMessage("Debug mode is enabled");
             else                                sender.sendMessage("Debug mode is disabled");
         } else {
-            var newDebugMode = false;
+            boolean newDebugMode = false;
             if (value.equals("true")) {
                 newDebugMode = true;
             } else if (value.equals("false")) {
@@ -470,7 +472,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         if (args.size() >= 1) value = args.get(0);
 
         if (value == null) {
-            var time = LocalTime.now(systemClock);
+            LocalTime time = LocalTime.now(systemClock);
             sender.sendMessage(String.format("The system time is %s (UTC)", time));
         } else {
             // Two possible values: "default" or a time in the format "HH:MM" or "HH:MM:SS"
@@ -480,18 +482,18 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 sender.sendMessage(String.format("System time set to %s (UTC)", LocalTime.now(systemClock)));
             } else {
                 // Sets a fake system clock to a given time (UTC). It does not change the system time.
-                var time = value.split(":");
+                String[] time = value.split(":");
                 if (time.length < 2 || time.length > 3) {
                     sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
                     return;
                 }
 
                 try {
-                    var hour = Integer.parseInt(time[0]);
-                    var minute = Integer.parseInt(time[1]);
+                    int hour = Integer.parseInt(time[0]);
+                    int minute = Integer.parseInt(time[1]);
 
                     // Seconds are optional
-                    var second = 0;
+                    int second = 0;
                     if (time.length == 3) {
                         second = Integer.parseInt(time[2]);
                     }
@@ -513,8 +515,8 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                         return;
                     }
 
-                    var now = LocalTime.now(ZoneOffset.UTC);
-                    var then = LocalTime.of(hour, minute, second);
+                    LocalTime now = LocalTime.now(ZoneOffset.UTC);
+                    LocalTime then = LocalTime.of(hour, minute, second);
                     systemClock = Clock.offset(Clock.systemUTC(), Duration.between(now, then));
 
                     sender.sendMessage(String.format("System time set to %s (UTC)", then));

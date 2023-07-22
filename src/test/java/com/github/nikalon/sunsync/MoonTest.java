@@ -22,8 +22,8 @@ public class MoonTest {
 
     @Test
     void fullMoonTest5February2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 2, 5, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 2, 5, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.5;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
@@ -33,8 +33,8 @@ public class MoonTest {
 
     @Test
     void fullMoonTest27December2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 12, 27, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 12, 27, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.5;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
@@ -44,8 +44,8 @@ public class MoonTest {
 
     @Test
     void newMoonTest20February2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 2, 20, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 2, 20, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.0;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
@@ -55,8 +55,8 @@ public class MoonTest {
 
     @Test
     void newMoonTest12December2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 12, 12, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 12, 12, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.0;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
@@ -66,8 +66,8 @@ public class MoonTest {
 
     @Test
     void lastQuarter12February2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 2, 13, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 2, 13, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.75;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
@@ -77,8 +77,8 @@ public class MoonTest {
 
     @Test
     void lastQuarter5December2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 12, 5, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 12, 5, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.75;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
@@ -88,8 +88,8 @@ public class MoonTest {
 
     @Test
     void firstQuarter27February2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 2, 27, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 2, 27, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.25;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
@@ -99,8 +99,8 @@ public class MoonTest {
 
     @Test
     void firstQuarter20December2023Test() throws NeverRaisesException, NeverSetsException {
-        var date = LocalDateTime.of(2023, 12, 20, 0, 0);
-        var moon_phase = Moon.phase(date);
+        LocalDateTime date = LocalDateTime.of(2023, 12, 20, 0, 0);
+        double moon_phase = Moon.phase(date);
 
         double expected = 0.25;
         assertTrue(moon_phase >= 0.0, "Moon phase must be in the range [0.0, 1.0)");
