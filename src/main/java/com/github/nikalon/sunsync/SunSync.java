@@ -294,7 +294,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
         // Synchronization interval
         long sync_interval = configFile.getLong("synchronization_interval_seconds", -1);
         if (! configuration.setSynchronizationIntervalSeconds(sync_interval)) {
-            logger.log(Level.SEVERE, String.format("\"synchronization_interval_seconds\" value in config.yml is invalid, using default value. Please, use integer values between %d and %d.", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
+            logger.severe(String.format("\"synchronization_interval_seconds\" value in config.yml is invalid, using default value. Please, use integer values between %d and %d.", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
         }
         debugLog(String.format("Synchronization interval set to %d seconds", configuration.getSynchronizationIntervalSeconds()));
     }
@@ -341,7 +341,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 parser.parse(sender, Arrays.asList(args).subList(1, args.length));
             }
         } else {
-            sender.sendMessage("You do not have permission to use this command");
+            sender.sendMessage(ChatColor.RED + "You do not have permission to use this command");
         }
 
         return true; // Do not show usage
@@ -407,7 +407,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 synchronizeTime();
                 sender.sendMessage(String.format("Location set to %s", configuration.getGeographicCoordinates()));
             } else {
-                sender.sendMessage("Invalid coordinates. Please, set a valid geographic coordinate or \"auto\"");
+                sender.sendMessage(ChatColor.RED + "Invalid coordinates. Please, set a valid geographic coordinate or \"auto\"");
             }
         }
     }
@@ -426,10 +426,10 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                     startTimeSynchronizationTask(); // Restart time synchronization task
                     sender.sendMessage(String.format("Synchronization interval set to %d seconds", syncIntervalSec));
                 } else {
-                    sender.sendMessage(String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
+                    sender.sendMessage(ChatColor.RED + String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
                 }
             } catch (NumberFormatException e) {
-                sender.sendMessage(String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
+                sender.sendMessage(ChatColor.RED + String.format("Invalid value. Please, enter a integer value between %d and %d", Configuration.getSyncIntervalLowestValidValue(), Configuration.getSyncIntervalHighestValidValue()));
             }
         }
     }
@@ -448,7 +448,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
             } else if (value.equals("false")) {
                 newDebugMode = false;
             } else {
-                sender.sendMessage("Invalid value. Please, enter a boolean value (true|false)");
+                sender.sendMessage(ChatColor.RED + "Invalid value. Please, enter a boolean value (true|false)");
                 return;
             }
 
@@ -484,7 +484,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
                 // Sets a fake system clock to a given time (UTC). It does not change the system time.
                 var time = value.split(":");
                 if (time.length < 2 || time.length > 3) {
-                    sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                    sender.sendMessage(ChatColor.RED + "Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
                     return;
                 }
 
@@ -500,18 +500,18 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
                     // Data validation
                     if (hour < 0 || hour > 24) {
-                        sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                        sender.sendMessage(ChatColor.RED + "Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
                         return;
                     }
 
                     if (minute < 0 || minute >= 60) {
-                        sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                        sender.sendMessage(ChatColor.RED + "Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
                         return;
                     }
 
                     if (second < 0 || second >= 60) {
                         // There is the leap second thing in UTC, but I am going to ignore it for now...
-                        sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                        sender.sendMessage(ChatColor.RED + "Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
                         return;
                     }
 
@@ -521,7 +521,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
                     sender.sendMessage(String.format("System time set to %s (UTC)", then));
                 } catch (NumberFormatException e) {
-                    sender.sendMessage("Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
+                    sender.sendMessage(ChatColor.RED + "Invalid time. Please, enter a valid UTC time in the given 24-hour format: HH:MM or HH:MM:SS");
                 }
             }
 
@@ -566,7 +566,7 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     @EventHandler(ignoreCancelled = true)
     public void onServerIssuedTimeSetCommandEvent(ServerCommandEvent event) {
         if (commandChangesGameTime(event.getCommand())) {
-            logger.warning(String.format("This command will have no effect while the plugin %s is enabled.", getName()));
+            logger.warning(ChatColor.YELLOW + String.format("This command will have no effect while the plugin %s is enabled.", getName()));
         }
     }
 
