@@ -330,14 +330,18 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         // Command /timesync
-        if (args.length == 0) return false; // Show usage (set in plugin.yml)
+        if (sender.isOp()) {
+            if (args.length == 0) return false; // Show usage (set in plugin.yml)
 
-        var parameter = args[0];
-        var parser = commandParameters.get(parameter);
-        if (parser == null) {
-            sender.sendMessage(ChatColor.RED + String.format("Unknown parameter \"%s\"", parameter));
+            var parameter = args[0];
+            var parser = commandParameters.get(parameter);
+            if (parser == null) {
+                sender.sendMessage(ChatColor.RED + String.format("Unknown parameter \"%s\"", parameter));
+            } else {
+                parser.parse(sender, Arrays.asList(args).subList(1, args.length));
+            }
         } else {
-            parser.parse(sender, Arrays.asList(args).subList(1, args.length));
+            sender.sendMessage("You do not have permission to use this command");
         }
 
         return true; // Do not show usage
@@ -345,44 +349,42 @@ public class SunSync extends JavaPlugin implements Runnable, Listener {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        // Ok, this code is fragile. If I add more parameters and I forget to update
-        // this method no suggestions will we shown. But I don't have 200 commands
-        // yet. A more complex solution is not needed for now.
-        if (args.length == 0) {
-            // Don't show any suggestions
-            return null;
-        }
-
-        var searchPattern = "";
+        // Ok, this code is fragile. If I add more parameters and I forget to update this method no suggestions will we
+        // shown. But I don't have 200 commands yet. A more complex solution is not needed for now.
         this.tempParameterSuggestion.clear();
-        if (args.length >= 1) {
-            if (args.length == 1) {
-                searchPattern = args[0];
-                if (this.configuration.getDebugMode()) {
-                    this.tempParameterSuggestion.addAll(this.parameterListDebugMode);
-                } else {
-                    this.tempParameterSuggestion.addAll(this.parameterList);
-                }
-            } else if (args.length == 2 && args[0].equals("location")) {
-                searchPattern = args[1];
-                this.tempParameterSuggestion.addAll(this.locationParameters);
-            } else if (args.length == 2 && args[0].equals("clock")) {
-                searchPattern = args[1];
-                this.tempParameterSuggestion.addAll(this.clockParameters);
-            } else if (args.length == 2 && args[0].equals("debugMode")) {
-                searchPattern = args[1];
-                this.tempParameterSuggestion.addAll(this.debugModeParameters);
-            }
-        }
 
-        // Filter suggestions in the case that the user has already typed any characters
-        if (! searchPattern.isEmpty()) {
-            for (int i = this.tempParameterSuggestion.size() - 1; i >= 0; i--) {
-                var suggestion = this.tempParameterSuggestion.get(i);
-                if (! suggestion.startsWith(searchPattern)) {
-                    this.tempParameterSuggestion.remove(i);
+        if (sender.isOp()) {
+            var searchPattern = "";
+            if (args.length >= 1) {
+                if (args.length == 1) {
+                    searchPattern = args[0];
+                    if (this.configuration.getDebugMode()) {
+                        this.tempParameterSuggestion.addAll(this.parameterListDebugMode);
+                    } else {
+                        this.tempParameterSuggestion.addAll(this.parameterList);
+                    }
+                } else if (args.length == 2 && args[0].equals("location")) {
+                    searchPattern = args[1];
+                    this.tempParameterSuggestion.addAll(this.locationParameters);
+                } else if (args.length == 2 && args[0].equals("clock")) {
+                    searchPattern = args[1];
+                    this.tempParameterSuggestion.addAll(this.clockParameters);
+                } else if (args.length == 2 && args[0].equals("debugMode")) {
+                    searchPattern = args[1];
+                    this.tempParameterSuggestion.addAll(this.debugModeParameters);
                 }
             }
+
+            // Filter suggestions in the case that the user has already typed any characters
+            if (! searchPattern.isEmpty()) {
+                for (int i = this.tempParameterSuggestion.size() - 1; i >= 0; i--) {
+                    var suggestion = this.tempParameterSuggestion.get(i);
+                    if (! suggestion.startsWith(searchPattern)) {
+                        this.tempParameterSuggestion.remove(i);
+                    }
+                }
+            }
+
         }
 
         return this.tempParameterSuggestion;
